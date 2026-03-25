@@ -4,7 +4,7 @@ on:
     types: [opened, reopened, synchronize]
 jobs:
   authenticate-commits:
-    runs-on: ubuntu-latest
+    runs-on: fedora-latest
 
     permissions:
       contents: read
@@ -12,8 +12,11 @@ jobs:
       issues: write
 
     steps:
+      - name: Install dependencies
+        run: |
+          dnf install -y nodejs24
       - name: Authenticating commits
-        uses: sequoia-pgp/authenticate-commits@v1
+        uses: https://github.com/sequoia-pgp/authenticate-commits@v1
         env:
           COMMENT: on-error
         with:
