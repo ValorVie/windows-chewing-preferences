@@ -1,4 +1,6 @@
 name: authenticate-commits
+env:
+  TRUST_ROOT: c3bf888d296fce0a858e4aa423d3a8524a05af2c
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -12,16 +14,10 @@ jobs:
       issues: write
 
     steps:
-      - name: Install dependencies
-        run: |
-          dnf install -y nodejs24
-      - name: Authenticating commits
-        uses: https://github.com/sequoia-pgp/authenticate-commits@v1
-        env:
-          COMMENT: on-error
+      - name: Install sq-git
+        run: dnf install -y sequoia-git
+      - uses: actions/checkout@v6
         with:
-          # To reduce the workflow's verbosity, use 'on-error'
-          # to only post a comment when an error occurs, or 'never' to
-          # never post a comment.  (In all cases the information is
-          # still available in the step's summary.)
-          comment: on-error
+          fetch-depth: 0
+      - name: Authenticating commits
+        run: sq-git log --trust-root $TRUST_ROOT
