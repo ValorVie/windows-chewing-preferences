@@ -45,6 +45,7 @@ export type ChewingTsfConfig = {
 export type KeybindValue = {
   key: string;
   action: string;
+  param: string;
 };
 
 export type Config = {

@@ -29,6 +29,7 @@ import { ChewingTsfConfig, Config, KeybindValue } from "./config";
 import { exit } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
+import KeybindingTab from "./KeybindingTab";
 
 type FontFamilyName = {
   name: string;
@@ -172,21 +173,6 @@ function update_channel_to_value(channel: string): string {
   }
 }
 
-function keybind_for(
-  keybind: [KeybindValue] | undefined,
-  action: string,
-): string {
-  if (keybind === undefined) {
-    return "";
-  }
-  for (const item of keybind) {
-    if (item.action == action) {
-      return item.key;
-    }
-  }
-  return "";
-}
-
 function App() {
   const styles = useStyles();
 
@@ -301,19 +287,7 @@ function App() {
     } as ChewingTsfConfig);
   };
 
-  const setKeybindConfig = (
-    ev: React.ChangeEvent<HTMLInputElement>,
-    data: InputOnChangeData,
-  ) => {
-    let keybind: KeybindValue[] = config?.keybind.map((i) => i) || [];
-    let index = keybind.findIndex(
-      (binding) => binding.action == ev.target.name,
-    );
-    if (index === -1) {
-      keybind.push({ key: data.value, action: ev.target.name });
-    } else {
-      keybind[index] = { key: data.value, action: ev.target.name };
-    }
+  const setKeybind = (keybind: KeybindValue[]) => {
     setConfig({
       ...config,
       keybind,
@@ -335,6 +309,7 @@ function App() {
         <Tab value="1">打字行為</Tab>
         <Tab value="2">界面外觀</Tab>
         <Tab value="3">鍵盤設定</Tab>
+        <Tab value="keybind">自訂快捷鍵</Tab>
         <Tab value="4">特殊符號</Tab>
         <Tab value="5">快捷符號</Tab>
         <Tab value="6">其他設定</Tab>
@@ -368,7 +343,6 @@ function App() {
           showAdvanced={showAdvanced}
           setShowAdvanced={setShowAdvanced}
           setConfig={setConfig}
-          setKeybindConfig={setKeybindConfig}
         />
       )}
       {selectedTab === "4" && config && (
@@ -383,6 +357,9 @@ function App() {
       )}
       {selectedTab === "6" && config && (
         <Others config={config} styles={styles} setConfig={setConfig} />
+      )}
+      {selectedTab === "keybind" && config && (
+        <KeybindingTab keybind={config.keybind} setKeybind={setKeybind} />
       )}
       <div className={styles.action}>
         <Button
@@ -783,7 +760,6 @@ const Layout = ({
   showAdvanced,
   setShowAdvanced,
   setConfig,
-  setKeybindConfig,
 }) => (
   <div className={styles.content} role="tabpanel" aria-labelledby="Layout">
     <div className={styles.column}>
@@ -846,21 +822,6 @@ const Layout = ({
             </Dropdown>
           </Field>
         </Tooltip>
-        全域快捷鍵：
-        <Field label="切換輸出簡體中文" orientation="horizontal">
-          <Input
-            name="toggle_simplified_chinese"
-            value={keybind_for(config?.keybind, "toggle_simplified_chinese")}
-            onChange={setKeybindConfig}
-          />
-        </Field>
-        <Field label="切換標準或許氏鍵盤" orientation="horizontal">
-          <Input
-            name="toggle_hsu_keyboard"
-            value={keybind_for(config?.keybind, "toggle_hsu_keyboard")}
-            onChange={setKeybindConfig}
-          />
-        </Field>
       </details>
     </div>
   </div>
