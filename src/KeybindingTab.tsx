@@ -155,7 +155,7 @@ function KeybindingTab(props: KeybindingTabProps) {
                 切換輸出簡體中文
               </option>
               <option value="toggle_hsu_keyboard">切換標準或許氏鍵盤</option>
-              <option value="selecting:unlearn_phrase">忘掉選擇中詞彙</option>
+              <option value="selecting_unlearn_phrase">忘掉選擇中詞彙</option>
             </Select>
           </div>
           <div className={styles.param}>

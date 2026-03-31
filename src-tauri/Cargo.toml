@@ -21,7 +21,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 anyhow = "1"
 chewing = "0.11.0"
-chewing_tip = { git = "https://github.com/chewing/windows-chewing-tsf" }
+chewing_tip = { git = "https://codeberg.org/chewing/windows-chewing-tsf" }
 log = "0.4"
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"

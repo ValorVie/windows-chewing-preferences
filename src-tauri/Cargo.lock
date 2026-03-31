@@ -486,7 +486,7 @@ dependencies = [
 [[package]]
 name = "chewing_tip"
 version = "26.1.3"
-source = "git+https://github.com/chewing/windows-chewing-tsf#8c49831a08433587bbc385b72cea1ad24f172c0a"
+source = "git+https://codeberg.org/chewing/windows-chewing-tsf#b4470f1476d301341b5836f6909e94277dc93a45"
 dependencies = [
  "anyhow",
  "cc",
