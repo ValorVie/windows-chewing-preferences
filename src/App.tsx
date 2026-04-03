@@ -584,6 +584,12 @@ const InputBehaviors = ({
               onChange={setBooleanConfig}
             />
           </Tooltip>
+          <Checkbox
+            label="設定英文模式等於關閉鍵盤"
+            name="sync_lang_mode_openclose"
+            checked={config?.sync_lang_mode_openclose}
+            onChange={setBooleanConfig}
+          />
         </details>
       </div>
     </div>

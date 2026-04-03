@@ -486,7 +486,7 @@ dependencies = [
 [[package]]
 name = "chewing_tip"
 version = "26.1.3"
-source = "git+https://codeberg.org/chewing/windows-chewing-tsf#b4470f1476d301341b5836f6909e94277dc93a45"
+source = "git+https://codeberg.org/chewing/windows-chewing-tsf#78046f13a56d7bfdc44e208d167941f8f1072b8f"
 dependencies = [
  "anyhow",
  "cc",
@@ -1692,7 +1692,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]

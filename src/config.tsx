@@ -37,6 +37,7 @@ export type ChewingTsfConfig = {
   notify_border_color: string;
   keyboard_layout: number;
   simulate_english_layout: number;
+  sync_lang_mode_openclose: boolean;
   keybind: [KeybindValue];
   auto_check_update_channel: string;
   update_info_url: string;
