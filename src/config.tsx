@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025-2026 Chewing Project Authors
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 export type ChewingTsfConfig = {
   switch_lang_with_shift: boolean;
   shift_key_sensitivity: number;
