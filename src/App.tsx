@@ -26,9 +26,11 @@ import {
   InputOnChangeData,
   Slider,
   Tooltip,
+  Select,
+  SelectOnChangeData,
 } from "@fluentui/react-components";
 import { invoke } from "@tauri-apps/api/core";
-import React, { useEffect } from "react";
+import React, { ChangeEvent, useEffect } from "react";
 import { ChewingTsfConfig, Config, KeybindValue } from "./config";
 import { exit } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
@@ -618,6 +620,74 @@ const Appearance = ({
     return font.display_name;
   };
   const apply_font_style = systemFonts.length < 500;
+  const determineColorTheme = (config: ChewingTsfConfig): string => {
+    if (!config) {
+      return "custom";
+    }
+    if (
+      config.font_fg_color == "EEEEEEFF" &&
+      config.font_bg_color == "333333FF" &&
+      config.cand_list_border_color == "222222FF" &&
+      config.font_highlight_fg_color == "FFFFFFFF" &&
+      config.font_highlight_bg_color == "111111FF" &&
+      config.font_number_fg_color == "8C8DFFFF" &&
+      config.notify_fg_color == "EEEEEEFF" &&
+      config.notify_bg_color == "333333FF" &&
+      config.notify_border_color == "222222FF"
+    ) {
+      return "dark";
+    }
+    if (
+      config.font_fg_color == "000000FF" &&
+      config.font_bg_color == "FAFAFAFF" &&
+      config.cand_list_border_color == "D6D9DBFF" &&
+      config.font_highlight_fg_color == "FFFFFFFF" &&
+      config.font_highlight_bg_color == "000000FF" &&
+      config.font_number_fg_color == "0000FFFF" &&
+      config.notify_fg_color == "000000FF" &&
+      config.notify_bg_color == "FCFBDAFF" &&
+      config.notify_border_color == "D6D9DBFF"
+    ) {
+      return "light";
+    }
+    return "custom";
+  };
+  const selectColorTheme = (
+    _ev: ChangeEvent<HTMLSelectElement>,
+    data: SelectOnChangeData,
+  ) => {
+    if (data.value == "dark") {
+      setConfig({
+        ...config,
+        font_fg_color: "EEEEEEFF",
+        font_bg_color: "333333FF",
+        cand_list_border_color: "222222FF",
+        font_highlight_fg_color: "FFFFFFFF",
+        font_highlight_bg_color: "111111FF",
+        font_number_fg_color: "8C8DFFFF",
+        notify_fg_color: "EEEEEEFF",
+        notify_bg_color: "333333FF",
+        notify_border_color: "222222FF",
+      } as ChewingTsfConfig);
+    }
+    if (data.value == "light") {
+      setConfig({
+        ...config,
+        font_fg_color: "000000FF",
+        font_bg_color: "FAFAFAFF",
+        cand_list_border_color: "D6D9DBFF",
+        font_highlight_fg_color: "FFFFFFFF",
+        font_highlight_bg_color: "000000FF",
+        font_number_fg_color: "0000FFFF",
+        notify_fg_color: "000000FF",
+        notify_bg_color: "FCFBDAFF",
+        notify_border_color: "D6D9DBFF",
+      } as ChewingTsfConfig);
+    }
+    if (data.value == "custom") {
+      setShowAdvanced(true);
+    }
+  };
 
   return (
     <div
@@ -672,6 +742,16 @@ const Appearance = ({
               ),
             )}
           </Combobox>
+        </Field>
+        <Field label="色彩佈景主題：">
+          <Select
+            value={determineColorTheme(config)}
+            onChange={selectColorTheme}
+          >
+            <option value="dark">深色主題</option>
+            <option value="light">淺色主題</option>
+            <option value="custom">自訂</option>
+          </Select>
         </Field>
         <details
           open={showAdvanced}
