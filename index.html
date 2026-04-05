@@ -30,6 +30,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
                 left: 0;
                 right: 0;
             }
+            /* FIXME: properly layout the components,
+             * instead of hard coding the background-color
+             */
+            @media (prefers-color-scheme: dark) {
+                body {
+                    background-color: rgb(41, 41, 41);
+                }
+            }
         </style>
     </head>
     <body>
