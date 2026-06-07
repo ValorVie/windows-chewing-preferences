@@ -6,7 +6,7 @@ use std::{env, fs, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use chewing::path::data_dir;
-use chewing_tip::config::Config;
+use chewing_tip_core::config::Config;
 
 fn default_user_path_for_file(file: &str) -> PathBuf {
     let user_profile = env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\unknown".into());
