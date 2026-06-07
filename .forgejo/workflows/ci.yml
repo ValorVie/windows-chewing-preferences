@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           dnf install -y rustup nodejs24 clang
-          rustup-init -y
+          rustup-init -y --no-update-default-toolchain
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Cache llvm-mingw
