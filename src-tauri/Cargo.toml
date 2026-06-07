@@ -20,7 +20,6 @@ name = "ChewingPreferences"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
 chewing = "0.13.0-alpha.2"
 chewing_tip_core = { git = "https://codeberg.org/chewing/windows-chewing-tsf" }
 log = "0.4"

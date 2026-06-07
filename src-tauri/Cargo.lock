@@ -473,7 +473,6 @@ dependencies = [
 name = "chewing-preferences"
 version = "26.4.1"
 dependencies = [
- "anyhow",
  "chewing",
  "chewing_tip_core",
  "log",

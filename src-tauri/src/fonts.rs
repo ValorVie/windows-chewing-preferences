@@ -4,8 +4,8 @@
 
 use std::cmp::Ordering;
 
-use anyhow::{Context, Result};
 use log::error;
+use scoped_error::{Error, expect_error};
 use serde::{Deserialize, Serialize};
 use windows::{
     Win32::{
@@ -40,62 +40,69 @@ const INFO_ID_LIST: [DWRITE_INFORMATIONAL_STRING_ID; 4] = [
     DWRITE_INFORMATIONAL_STRING_WIN32_FAMILY_NAMES,
 ];
 
-fn enum_font_families_dwrite() -> Result<Vec<FontFamilyName>> {
-    let mut result = vec![];
-    let dwrite_factory: IDWriteFactory =
-        unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)? };
-    let mut system_font_collection = None;
-    unsafe { dwrite_factory.GetSystemFontCollection(&mut system_font_collection, false)? };
-    if let Some(font_collection) = system_font_collection {
-        let family_count = unsafe { font_collection.GetFontFamilyCount() };
-        for i in 0..family_count {
-            let font_family = unsafe { font_collection.GetFontFamily(i)? };
-            if !family_is_zh_hant(&font_family)? {
-                continue;
+fn enum_font_families_dwrite() -> Result<Vec<FontFamilyName>, Error> {
+    expect_error(
+        "Failed to enumerate font families using DirectWrite",
+        || {
+            let mut result = vec![];
+            let dwrite_factory: IDWriteFactory =
+                unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)? };
+            let mut system_font_collection = None;
+            unsafe { dwrite_factory.GetSystemFontCollection(&mut system_font_collection, false)? };
+            if let Some(font_collection) = system_font_collection {
+                let family_count = unsafe { font_collection.GetFontFamilyCount() };
+                for i in 0..family_count {
+                    let font_family = unsafe { font_collection.GetFontFamily(i)? };
+                    if !family_is_zh_hant(&font_family)? {
+                        continue;
+                    }
+
+                    let family_names = unsafe { font_family.GetFamilyNames()? };
+
+                    let mut en_name_idx = 0;
+                    let mut exists = FALSE;
+                    unsafe {
+                        family_names.FindLocaleName(w!("en-us"), &mut en_name_idx, &mut exists)?
+                    };
+                    if !exists.as_bool() {
+                        en_name_idx = 0;
+                    }
+                    let len = unsafe { family_names.GetStringLength(en_name_idx)? } as usize;
+                    let mut name = vec![0u16; len + 1];
+                    unsafe { family_names.GetString(en_name_idx, name.as_mut_slice())? };
+
+                    let name = String::from_utf16_lossy(&name[..len]);
+                    let display_name = get_localized_name(&family_names)
+                        .or_else(|| get_localized_info_string(&font_family))
+                        .unwrap_or(name.clone());
+
+                    result.push(FontFamilyName { name, display_name })
+                }
             }
-
-            let family_names = unsafe { font_family.GetFamilyNames()? };
-
-            let mut en_name_idx = 0;
-            let mut exists = FALSE;
-            unsafe { family_names.FindLocaleName(w!("en-us"), &mut en_name_idx, &mut exists)? };
-            if !exists.as_bool() {
-                en_name_idx = 0;
-            }
-            let len = unsafe { family_names.GetStringLength(en_name_idx)? } as usize;
-            let mut name = vec![0u16; len + 1];
-            unsafe { family_names.GetString(en_name_idx, name.as_mut_slice())? };
-
-            let name = String::from_utf16_lossy(&name[..len]);
-            let display_name = get_localized_name(&family_names)
-                .or_else(|| get_localized_info_string(&font_family))
-                .unwrap_or(name.clone());
-
-            result.push(FontFamilyName { name, display_name })
-        }
-    }
-    result.sort_by(|a, b| {
-        let a_localized = a.display_name.chars().any(|ch| !ch.is_ascii());
-        let b_localized = b.display_name.chars().any(|ch| !ch.is_ascii());
-        match (a_localized, b_localized) {
-            (true, true) => a.display_name.cmp(&b.display_name),
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-            (false, false) => a.display_name.cmp(&b.display_name),
-        }
-    });
-    Ok(result)
+            result.sort_by(|a, b| {
+                let a_localized = a.display_name.chars().any(|ch| !ch.is_ascii());
+                let b_localized = b.display_name.chars().any(|ch| !ch.is_ascii());
+                match (a_localized, b_localized) {
+                    (true, true) => a.display_name.cmp(&b.display_name),
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    (false, false) => a.display_name.cmp(&b.display_name),
+                }
+            });
+            Ok(result)
+        },
+    )
 }
 
-fn family_is_zh_hant(font_family: &IDWriteFontFamily) -> Result<bool> {
+fn family_is_zh_hant(font_family: &IDWriteFontFamily) -> Result<bool, Error> {
     unsafe {
-        let font = font_family.GetFont(0)?;
-        if font.IsSymbolFont().as_bool() {
-            return Ok(false);
-        }
-        font.HasCharacter('酷' as u32)
-            .map(|b| b.as_bool())
-            .context("failed to detect font unicode coverage")
+        expect_error("Failed to detect font unicode coverage", || {
+            let font = font_family.GetFont(0)?;
+            if font.IsSymbolFont().as_bool() {
+                return Ok(false);
+            }
+            Ok(font.HasCharacter('酷' as u32).map(|b| b.as_bool())?)
+        })
     }
 }
 
