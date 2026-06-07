@@ -22,7 +22,7 @@ use windows::{
 };
 
 #[tauri::command]
-pub fn get_system_fonts() -> Result<Vec<FontFamilyName>, String> {
+pub async fn get_system_fonts() -> Result<Vec<FontFamilyName>, String> {
     enum_font_families_dwrite().map_err(|e| e.to_string())
 }
 
