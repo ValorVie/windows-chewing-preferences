@@ -153,6 +153,10 @@ function keyboard_layout_to_value(layout: number): string {
       return "倚天鍵盤";
     case 5:
       return "倚天 26 鍵";
+    case 6:
+      return "Dvorak (掃描碼變換)";
+    case 7:
+      return "Dvorak 許氏 (掃描碼變換)";
     case 8:
       return "大千 26 鍵";
     case 9:
@@ -161,6 +165,16 @@ function keyboard_layout_to_value(layout: number): string {
       return "台灣華語羅馬拼音";
     case 11:
       return "注音二式";
+    case 12:
+      return "Carplx (掃描碼變換)";
+    case 13:
+      return "Colemak-DH ANSI (掃描碼變換)";
+    case 14:
+      return "Colemak-DH Orth (掃描碼變換)";
+    case 15:
+      return "Workman (掃描碼變換)";
+    case 16:
+      return "Colemak (掃描碼變換)";
     default:
       return "標準鍵盤";
   }
@@ -870,10 +884,17 @@ const Layout = ({
           <Option value="3">精業鍵盤</Option>
           <Option value="4">倚天鍵盤</Option>
           <Option value="5">倚天 26 鍵</Option>
+          <Option value="6">Dvorak (掃描碼變換)</Option>
+          <Option value="7">Dvorak 許氏 (掃描碼變換)</Option>
           <Option value="8">大千 26 鍵</Option>
           <Option value="9">漢語拼音</Option>
           <Option value="10">台灣華語羅馬拼音</Option>
           <Option value="11">注音二式</Option>
+          <Option value="12">Carplx (掃描碼變換)</Option>
+          <Option value="16">Colemak (掃描碼變換)</Option>
+          <Option value="13">Colemak-DH ANSI (掃描碼變換)</Option>
+          <Option value="14">Colemak-DH Orth (掃描碼變換)</Option>
+          <Option value="15">Workman (掃描碼變換)</Option>
         </Dropdown>
       </Field>
       <details
