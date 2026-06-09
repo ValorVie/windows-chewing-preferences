@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "chewing-preferences"
-version = "26.4.1"
+version = "26.6.0"
 dependencies = [
  "chewing",
  "chewing_tip_core",
