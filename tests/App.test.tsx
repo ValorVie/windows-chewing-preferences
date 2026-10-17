@@ -135,19 +135,47 @@ test("zero is valid, invalid drafts block apply and confirm, and correction re-e
   expect((apply as HTMLButtonElement).disabled).toBe(false);
 });
 
-test("turning mode off disables controls while preserving the edited values", async () => {
+test("turning mode off disables presets and keeps numeric fields editable", async () => {
   const user = await openD512();
   const weight = screen.getByRole("textbox", { name: "重排權重 w" });
   const mode = screen.getByRole("combobox", { name: "D512 模式" });
   await user.clear(weight);
   await user.type(weight, "0.875");
   await user.selectOptions(mode, "0");
-  expect((weight as HTMLInputElement).disabled).toBe(true);
-  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).disabled).toBe(true);
+  expect((weight as HTMLInputElement).disabled).toBe(false);
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).disabled).toBe(false);
   expect((screen.getByRole("combobox", { name: "D512 檔位" }) as HTMLSelectElement).disabled).toBe(true);
   await user.selectOptions(mode, "1");
   expect((weight as HTMLInputElement).value).toBe("0.875");
   expect((weight as HTMLInputElement).disabled).toBe(false);
+});
+
+test.each([
+  ["重排權重 w", "d512_weight"],
+  ["替換門檻 τ", "d512_margin"],
+] as const)("invalid %s can be corrected after turning D512 off and saved from another tab", async (label, key) => {
+  const user = await openD512();
+  const input = screen.getByRole("textbox", { name: label });
+  const apply = screen.getByRole("button", { name: "套用" });
+  const confirm = screen.getByRole("button", { name: "確定" });
+  await user.clear(input);
+  await user.type(input, "-0.1");
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "0");
+  expect((input as HTMLInputElement).disabled).toBe(false);
+  expect((apply as HTMLButtonElement).disabled).toBe(true);
+  expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
+  await user.clear(input);
+  await user.type(input, "0.625");
+  expect((apply as HTMLButtonElement).disabled).toBe(false);
+  expect((confirm as HTMLButtonElement).disabled).toBe(false);
+  await user.click(screen.getByRole("tab", { name: "打字行為" }));
+  await user.click(screen.getByRole("checkbox", { name: "使用 Esc 清空編輯區字串" }));
+  await user.click(apply);
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig,
+    chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, [key]: 0.625, esc_clean_all_buf: true },
+  } });
 });
 
 test("switching tabs retains the draft and manually restoring values derives balanced", async () => {

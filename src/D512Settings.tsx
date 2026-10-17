@@ -78,7 +78,6 @@ export default function D512Settings({ draft, onChange }: Props) {
               name={key}
               inputMode="decimal"
               value={draft[key]}
-              disabled={disabled}
               onChange={(_event, data) => onChange({ ...draft, [key]: data.value })}
             />
           </Field>
