@@ -41,6 +41,13 @@ windows = {
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[patch."https://codeberg.org/chewing/windows-chewing-tsf"]
+chewing_tip_core = { path = "../../windows-chewing-tsf/crates/chewing_tip_core" }
+
+[dev-dependencies]
+windows = { version = "0.61.0", features = ["Win32_System_Registry"] }
+windows-registry = "0.6.1"
+
 [profile.dev]
 opt-level = 1
 

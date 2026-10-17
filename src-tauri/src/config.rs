@@ -8,6 +8,10 @@ use chewing::path::data_dir;
 use chewing_tip_core::config::Config;
 use scoped_error::{Error, ErrorExt, expect_error};
 
+#[cfg(all(test, windows))]
+#[path = "config_tests.rs"]
+mod tests;
+
 fn default_user_path_for_file(file: &str) -> PathBuf {
     let user_profile = env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\unknown".into());
     let user_data_dir = PathBuf::from(user_profile).join("ChewingTextService");
