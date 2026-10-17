@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// UI draft only. The common core will own persistence once its API is available.
+import type { ChewingTsfConfig } from "./config";
+
+// Preserve editing text; the common core owns persistence as f64 values.
 export type D512Mode = 0 | 1 | 2;
 export type D512Draft = {
   D512Mode: D512Mode;
@@ -15,6 +17,26 @@ export const D512_DEFAULTS: Readonly<D512Draft> = {
   D512Weight: "0.25",
   D512Margin: "0.25",
 };
+
+export function d512DraftFromConfig(config: ChewingTsfConfig): D512Draft {
+  return {
+    D512Mode: config.d512_mode,
+    D512Weight: String(config.d512_weight),
+    D512Margin: String(config.d512_margin),
+  };
+}
+
+export function withD512Draft(config: ChewingTsfConfig, draft: D512Draft): ChewingTsfConfig {
+  if (d512ValueError(draft.D512Weight) || d512ValueError(draft.D512Margin)) {
+    throw new Error("D512 數值無效");
+  }
+  return {
+    ...config,
+    d512_mode: draft.D512Mode,
+    d512_weight: Number(draft.D512Weight),
+    d512_margin: Number(draft.D512Margin),
+  };
+}
 
 export function d512ValueError(text: string): string | undefined {
   const value = text.trim();

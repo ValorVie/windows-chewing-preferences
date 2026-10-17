@@ -26,6 +26,9 @@ export type ChewingTsfConfig = {
   output_simp_chinese: boolean;
   sel_key_type: number;
   conv_engine: number;
+  d512_mode: 0 | 1 | 2;
+  d512_weight: number;
+  d512_margin: number;
   cand_per_row: number;
   cand_per_page: number;
   font_size: number;

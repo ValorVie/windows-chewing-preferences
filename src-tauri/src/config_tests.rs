@@ -129,6 +129,24 @@ fn d512_json_and_registry_round_trip_preserves_raw_modes_and_f64_bits() {
 }
 
 #[test]
+fn d512_json_round_trip_preserves_representative_positive_f64_values() {
+    let mut seed = 0x51220261017_u64;
+    for _ in 0..1024 {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let value = f64::from_bits(0x3ff0000000000000 | (seed & 0x000fffffffffffff));
+        let mut cfg = Config::default();
+        cfg.chewing_tsf.d512_weight = value;
+        let encoded = serde_json::to_string(&cfg).unwrap();
+        let decoded: Config = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(
+            decoded.chewing_tsf.d512_weight.to_bits(),
+            value.to_bits(),
+            "input: {value:.17}"
+        );
+    }
+}
+
+#[test]
 fn d512_export_and_import_preserve_mode_and_parameter_precision() {
     for mode in [0, 1, 2] {
         let file = TempFile::new();

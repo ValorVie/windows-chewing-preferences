@@ -21,9 +21,7 @@ export default function D512Settings({ draft, onChange }: Props) {
   return (
     <section aria-labelledby="d512-heading">
       <h2 id="d512-heading">D512 句級重排</h2>
-      <p role="note">
-        D512 設定尚未接上儲存，目前只供調整與預覽；關閉視窗後不會保留。
-      </p>
+      <p>選擇檔位會帶入權重與門檻；也可直接調整數值。</p>
       <Field
         label="D512 模式"
         hint={draft.D512Mode === 2 ? "尚未支援，暫時等同自動" : undefined}

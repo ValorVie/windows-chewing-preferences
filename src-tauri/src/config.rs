@@ -12,6 +12,20 @@ use scoped_error::{Error, ErrorExt, expect_error};
 #[path = "config_tests.rs"]
 mod tests;
 
+fn validate_d512(config: &Config) -> Result<(), String> {
+    let settings = &config.chewing_tsf;
+    if !(0..=2).contains(&settings.d512_mode) {
+        return Err("D512 模式必須為 0、1 或 2。".into());
+    }
+    if [settings.d512_weight, settings.d512_margin]
+        .into_iter()
+        .any(|value| !value.is_finite() || value < 0.0)
+    {
+        return Err("D512 權重與門檻必須是大於或等於 0 的有限數值。".into());
+    }
+    Ok(())
+}
+
 fn default_user_path_for_file(file: &str) -> PathBuf {
     let user_profile = env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\unknown".into());
     let user_data_dir = PathBuf::from(user_profile).join("ChewingTextService");
@@ -59,11 +73,14 @@ pub(crate) fn import_config(path: String) -> Result<Config, String> {
             Ok(cfg)
         })
     }
-    inner(&path).map_err(|e| e.report().to_string())
+    let config = inner(&path).map_err(|e| e.report().to_string())?;
+    validate_d512(&config)?;
+    Ok(config)
 }
 
 #[tauri::command]
 pub(crate) fn export_config(path: String, config: Config) -> Result<(), String> {
+    validate_d512(&config)?;
     fn inner(path: &str, config: &Config) -> Result<(), Error> {
         expect_error("無法匯出設定檔", || {
             let content = toml::to_string_pretty(config)?;
@@ -101,6 +118,7 @@ pub(crate) fn load_config() -> Result<Config, String> {
 
 #[tauri::command]
 pub fn save_config(config: Config) -> Result<(), String> {
+    validate_d512(&config)?;
     fn inner(config: &Config) -> Result<(), Error> {
         expect_error("無法儲存設定", || {
             config.save_reg();

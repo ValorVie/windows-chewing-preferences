@@ -37,7 +37,13 @@ import { listen } from "@tauri-apps/api/event";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import KeybindingTab from "./KeybindingTab";
 import D512Settings from "./D512Settings";
-import { D512_DEFAULTS, d512ValueError, type D512Draft } from "./d512";
+import {
+  D512_DEFAULTS,
+  d512DraftFromConfig,
+  d512ValueError,
+  withD512Draft,
+  type D512Draft,
+} from "./d512";
 
 type FontFamilyName = {
   name: string;
@@ -224,6 +230,7 @@ function App() {
         .then((value) => {
           const cfg = value as Config;
           setConfig(cfg.chewing_tsf);
+          setD512Draft(d512DraftFromConfig(cfg.chewing_tsf));
           setSwkbDat(cfg.swkb_dat);
           setSymbolsDat(cfg.symbols_dat);
         })
@@ -235,6 +242,10 @@ function App() {
         });
     });
     const unlisten_export = listen("export", async () => {
+      if (!config || d512Invalid) {
+        await message("請先修正 D512 數值後再匯出。", { title: "設定無效", kind: "error" });
+        return;
+      }
       const file = await save({
         defaultPath: "新酷音設定.toml",
         filters: [{ name: "TOML", extensions: ["toml"] }],
@@ -244,7 +255,7 @@ function App() {
       }
       invoke("export_config", {
         path: file,
-        config: { chewing_tsf: config, symbols_dat, swkb_dat },
+        config: { chewing_tsf: withD512Draft(config, d512Draft), symbols_dat, swkb_dat },
       }).catch(async (e) => {
         await message("無法寫入檔案。\n\n" + e, {
           title: "錯誤",
@@ -256,12 +267,13 @@ function App() {
       unlisten_import.then((f) => f());
       unlisten_export.then((f) => f());
     };
-  }, [config, symbols_dat, swkb_dat]);
+  }, [config, symbols_dat, swkb_dat, d512Draft, d512Invalid]);
 
   useEffect(() => {
     invoke("load_config").then((value) => {
       const config = value as Config;
       setConfig(config.chewing_tsf);
+      setD512Draft(d512DraftFromConfig(config.chewing_tsf));
       setSwkbDat(config.swkb_dat);
       setSymbolsDat(config.symbols_dat);
     });
@@ -322,10 +334,12 @@ function App() {
     } as ChewingTsfConfig);
   };
 
-  const save_config = () =>
-    invoke("save_config", {
-      config: { chewing_tsf: config, symbols_dat, swkb_dat },
+  const save_config = () => {
+    if (!config || d512Invalid) return Promise.reject(new Error("設定尚未就緒或 D512 數值無效"));
+    return invoke("save_config", {
+      config: { chewing_tsf: withD512Draft(config, d512Draft), symbols_dat, swkb_dat },
     });
+  };
 
   return (
     <form
@@ -406,7 +420,7 @@ function App() {
       )}
       <div className={styles.action}>
         <Button
-          disabled={d512Invalid}
+          disabled={!config || d512Invalid}
           onClick={() => {
             save_config().then(() => exit(0));
           }}
@@ -414,7 +428,7 @@ function App() {
           確定
         </Button>
         <Button onClick={() => exit(0)}>取消</Button>
-        <Button disabled={d512Invalid} onClick={save_config}>
+        <Button disabled={!config || d512Invalid} onClick={save_config}>
           套用
         </Button>
       </div>
