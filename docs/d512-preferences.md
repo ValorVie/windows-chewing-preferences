@@ -1,23 +1,23 @@
 ---
-title: D512 設定介面與待接線項目
-type: plan
+title: D512 設定介面與共用設定
+type: reference
 date: 2026-10-17
 author: Chewing Project Authors
-status: ui-preview
+status: implemented
 ---
 
 <!-- SPDX-FileCopyrightText: 2026 Chewing Project Authors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# D512 設定介面與待接線項目
+# D512 設定介面與共用設定
 
-本分支已實作 D512 控制項、數值驗證與檔位連動，目前只保留視窗內的草稿，不讀寫登錄或匯入／匯出 D512 設定。畫面明示尚未接上儲存；「套用／確定」仍只儲存既有設定。取得 TSF 共用設定 commit 且經主控通知後，才接 path patch 與讀寫；引擎尚未提供檔位表時，平衡檔使用預設值，其餘兩檔保留「待校準」。
+本分支已實作 D512 控制項、數值驗證、檔位連動及共用設定讀寫。「套用／確定」透過 `chewing_tip_core` 儲存模式、權重與門檻，匯入／匯出也包含這三個欄位。引擎尚未提供完整檔位表時，平衡檔使用預設值，其餘兩檔保留「待校準」。
 
 ## 現有結構與放置位置
 
 以主線 `141a10aa9e822ec4511b4bf47c21691c51ad6775` 為基準：前端使用 React、Fluent UI 與 Vite，後端使用 Tauri 2。`src/App.tsx` 管理目前設定與七個分頁，`src/config.tsx` 宣告前端型別；Rust 的 `src-tauri/src/config.rs` 使用 `chewing_tip_core::config::Config` 載入、儲存及匯入／匯出設定。
 
-原樣主線建置通過：以 stable Rust/Cargo 1.99.1 執行完整 Windows Release 建置，exit 0。主線 `windows` 依賴的多行 inline table 使用 TOML 1.1；先前為 Cargo 1.91.1 加入的語法相容修正已用 `git revert` 撤回，manifest 恢復上游原文，未改寫歷史。
+階段 1 的原樣主線建置通過：以 stable Rust/Cargo 1.99.1 對未修改的上游程式碼執行完整 Windows Release 建置，exit 0。主線 `windows` 依賴的多行 inline table 使用 TOML 1.1；先前為 Cargo 1.91.1 加入的語法相容修正已用 `git revert` 撤回，未改寫歷史。後續的 manifest 差異為 D512 共用設定 path patch、測試依賴及 JSON 精度功能。
 
 文案直接寫在 TSX、Rust 選單及 Tauri 設定中，目前沒有獨立 i18n 函式庫或翻譯目錄。新增文案沿用繁體中文，不為此功能建立另一套翻譯架構。
 
@@ -41,32 +41,33 @@ status: ui-preview
 
 ## 共用設定與數值保存
 
-目前 `src/d512.ts` 只在 UI 草稿使用 `D512Mode`、`D512Weight`、`D512Margin` 及契約預設值，數值保留原文字串；草稿不加入傳給既有 Rust 命令的設定物件。檔位以十進位有效數字比較，避免將 `0.25000000000000001` 捨入成平衡檔。
+`src/d512.ts` 在 UI 草稿保留數值原文；載入、儲存及匯入／匯出時，對應共用設定的 `d512_mode`、`d512_weight`、`d512_margin`。模式保留原樣的 0／1／2；只有 TSF 執行引擎時處理僅建議暫時等同自動的行為。檔位以十進位有效數字比較，避免在編輯時將 `0.25000000000000001` 捨入成平衡檔。
 
-待接線時以 Cargo path patch 使用同一工作區的 TSF `feature/d512` 之 `chewing_tip_core`。C3 只使用其共用欄位與 `from_reg`／`save_reg`，不另外實作登錄存取器。前端型別依 C2 的實際序列化欄位更新，仍走現有 `load_config`、`save_config`、匯入與匯出流程。
+Cargo path patch 使用同一工作區的 TSF `feature/d512` 之 `chewing_tip_core`；相對路徑為 `../../windows-chewing-tsf/crates/chewing_tip_core`，從 `src-tauri/Cargo.toml` 起算。前端沿用現有 `load_config`、`save_config`、匯入與匯出流程；C3 不另外實作登錄存取器，實際讀寫仍使用共用型別的 `from_reg`／`save_reg`。
 
 共用契約在 `HKCU\Software\ChewingTextService` 保存 `D512Mode`（DWORD）及 `D512Weight`、`D512Margin`（REG_SZ 十進位字串）。這裡記錄契約用途，實際鍵名及預設值的唯一實作留在 TSF。
 
-數值欄位使用可保留編輯中原文的輸入框，避免沿用現有 `setNumberConfig` 的 `parseInt` 及真假值回退：前者會截去小數，後者可能把合法的 0 換成預設值。空白、負數、非數值、NaN、Infinity、溢位、非零值下溢成 0 及無效尾字元會顯示欄位錯誤並阻擋「套用／確定」，跨分頁也保留錯誤說明；不可靜默截斷或重設使用者輸入。D512 匯出尚未接線，後續接線時須同步驗證。
+數值欄位使用可保留編輯中原文的輸入框，避免沿用現有 `setNumberConfig` 的 `parseInt` 及真假值回退：前者會截去小數，後者可能把合法的 0 換成預設值。空白、負數、非數值、NaN、Infinity、溢位、非零值下溢成 0 及無效尾字元會顯示欄位錯誤並阻擋「套用／確定」與匯出，跨分頁也保留錯誤說明。Rust 端在儲存或匯出前另驗證模式與有限非負數值；匯入後也先驗證，才交給前端。
 
-不使用固定小數位格式化。跨前端、Rust 與 REG_SZ 必須保留 C2 共用數值型別的往返精度；具體序列化方式待讀到 C2 的型別後確定。若共用型別只有 f64，驗收須區分「f64 值往返不變」與「任意長十進位原文完全保留」，不得將前者宣稱為後者；若契約要求後者，先回報主控協調共用型別。
+共用型別的權重與門檻為 f64，儲存時從編輯原文轉成 JavaScript Number，經 JSON 傳給 Rust；不使用固定小數位格式化。`serde_json` 開啟 `float_roundtrip`，避免 JSON 解析造成額外的 1 ULP 誤差；共用 core 以 f64 的十進位往返表示寫入 REG_SZ。這保留共用 f64 值的精度，不保證任意長十進位原文在重新載入後逐字相同。
 
-## 第二階段的驗證順序
+## 驗證與人工驗收界線
 
 原專案沒有前端測試入口，本分支新增 `npm test`（Vitest、jsdom、React Testing Library）及 `tests/`。實際 App 與 Fluent UI 控制項參與測試，只替換 Tauri 邊界並使用合成資料。已保留 UI 缺失及數值／檔位的 RED，再驗證 GREEN；`tsc` 或 Vite 建置不計入行為測試數。
 
-已驗證 UI 與純數值邏輯；以下接線驗證仍待共用 API：
+測試分別驗證以下邊界；建置、測試與實際安裝驗收分開記錄：
 
-1. 前端已覆蓋：檔位帶值、手動編輯後推算自訂、回填檔位值、待校準檔位不能選、模式 2 提示、關閉後保留值、跨分頁草稿與錯誤說明。
-2. 待接前端與 Rust 邊界：0、小數及需要足夠有效位數的值可往返；負數、空字串、NaN、Infinity、溢位與尾隨垃圾不能儲存。
-3. Rust：透過共用型別驗證預設、序列化與讀寫往返；登錄測試需使用共用 API 支援的隔離測試位置，不能改使用者的實際輸入法設定。若共用 API 沒有隔離入口，回報主控請 C2 提供。
-4. 重新載入、匯入／匯出與取消時的行為保持一致；最後在 PC 建出 `ChewingPreferences.exe`，不安裝、不註冊。
+1. 前端：檔位帶值、手動編輯後推算自訂、回填檔位值、待校準檔位不能選、模式 2 提示、關閉後保留值、跨分頁草稿與錯誤說明，以及載入／儲存／匯入／匯出的實際共用欄位。
+2. Rust：模式 0／1／2、0、小數、相鄰 f64 與極端有限值的共用 core 登錄往返；另以固定種子的 1,024 個正 f64 值檢查 JSON 往返。Rust 匯入／匯出測試也檢查無效資料與負數的拒絕。
+3. 登錄測試沿用 core 的方式，用 `RegOverridePredefKey` 將測試程序的 HKCU 轉到暫存子樹，結束後還原映射並刪除；不改使用者的實際輸入法設定。TOML 測試只寫入暫存檔。
+4. PC 以 `npm run tauri -- build --no-bundle --ci --target x86_64-pc-windows-msvc -- --locked` 建出 `ChewingPreferences.exe`；不安裝、不註冊。實際輸入法設定生效、Windows 原生 GUI、縮放、安裝與回復仍需另外驗收。
 
 ## 依據與取捨
 
 - 成熟實作：本專案上述檔案的分頁、Fluent UI 欄位及 Tauri 設定命令；Mac 唯音 `D512RerankPreset.swift` 的 `matching` 與 `VwrSettingsPaneCocoaCandidates.swift` 的 `refresh`／`presetDidSet`。只參照連動方式，不移植其閾值、加分 b 或 0…10 上限。
 - 官方文件：[React 狀態結構](https://react.dev/learn/choosing-the-state-structure) 建議從既有資料推算可計算的顯示值；因此檔位不另存。[Tauri Windows 前置條件](https://v2.tauri.app/start/prerequisites/#windows) 說明 Windows 建置使用 C++ Build Tools、Rust 與 WebView2。
-- 工具鏈依據：[Rust 1.94 發布說明](https://blog.rust-lang.org/2026/03/05/Rust-1.94.0/#toml-11-support-in-cargo) 記錄 Cargo 自該版本起支援多行 inline table。使用較舊 Cargo 時改用標準表格語法，可避免為語法升級工具鏈。
-- 可靠文獻：[Goldberg, What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) 說明十進位與二進位浮點數轉換的誤差；據此將共用型別的往返精度列為獨立驗收項。這篇文獻不能證明目前尚未實作的保存流程已正確。
+- 隔離測試：[RegOverridePredefKey](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regoverridepredefkey) 的映射僅影響呼叫程序；[serde_json 功能列表](https://docs.rs/crate/serde_json/latest/features) 記錄 `float_roundtrip`。測試曾捕捉 `1.66530964545728732` 解析後少 1 ULP，不能以普通小數通過就推論所有 f64 都能無損往返。
+- 工具鏈依據：[Rust 1.94 發布說明](https://blog.rust-lang.org/2026/03/05/Rust-1.94.0/#toml-11-support-in-cargo) 記錄 Cargo 自該版本起支援多行 inline table；此分支的 Windows 驗證使用 stable 1.99.1。
+- 可靠文獻：[Goldberg, What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) 說明十進位與二進位浮點數轉換的誤差；據此將共用型別的往返精度列為獨立驗收項。文獻解釋風險，實際保存流程仍須用本專案的測試驗證。
 
-本文件記錄 C3 的 UI 行為及待接線項目，不取代引擎檔位表或 TSF 共用設定契約；目前沒有 D512 登錄往返或安裝驗收結果。
+本文件記錄 C3 的 UI 與設定邊界，不取代引擎檔位表或 TSF 共用設定契約；自動化登錄往返不能代替使用者的安裝與日常輸入驗收。

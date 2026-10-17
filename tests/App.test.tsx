@@ -46,6 +46,7 @@ const storedConfig = {
     sync_lang_mode_openclose: false,
     keybind: [{ key: "A", action: "text", param: "synthetic" }],
     auto_check_update_channel: "stable", update_info_url: "https://example.invalid/",
+    last_update_check_time: 0, modified_timestamp: 0,
   },
   symbols_dat: "", swkb_dat: "",
 };
