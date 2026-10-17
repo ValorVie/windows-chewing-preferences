@@ -181,6 +181,129 @@ fn d512_legacy_import_defaults_accept_key_to_tab() {
 }
 
 #[test]
+fn d512_two_mode_defaults_match_the_shared_contract() {
+    let defaults = serde_json::to_value(Config::default()).unwrap();
+    let settings = &defaults["chewing_tsf"];
+    assert_eq!(settings["d512_weight"], 0.25);
+    assert_eq!(settings["d512_margin"], 0.5);
+    assert_eq!(settings["d512_suggest_weight"], 0.25);
+    assert_eq!(settings["d512_suggest_margin"], 2.0);
+    assert_eq!(settings["d512_log_calibration"], 0);
+}
+
+#[test]
+fn d512_two_mode_parameters_and_log_flag_round_trip_independently() {
+    let mut wire = serde_json::to_value(Config::default()).unwrap();
+    for (field, value) in [
+        ("d512_weight", 0.375),
+        ("d512_margin", 0.625),
+        ("d512_suggest_weight", 0.12345678901234566),
+        ("d512_suggest_margin", 1.25),
+    ] {
+        wire["chewing_tsf"][field] = value.into();
+    }
+    let cfg: Config = serde_json::from_value(wire.clone()).unwrap();
+    // Check the wire contract before acquiring the registry lock so an expected
+    // RED on an old core cannot poison unrelated registry tests.
+    assert_eq!(
+        serde_json::to_value(cfg).unwrap()["chewing_tsf"]["d512_suggest_weight"],
+        0.12345678901234566
+    );
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let registry = IsolatedRegistry::new();
+    let key = registry.root.open("Software\\ChewingTextService").unwrap();
+    for mode in [0, 1, 2] {
+        for log in [0, 1] {
+            wire["chewing_tsf"]["d512_mode"] = mode.into();
+            wire["chewing_tsf"]["d512_log_calibration"] = log.into();
+            let cfg: Config = serde_json::from_value(wire.clone()).unwrap();
+            cfg.save_reg();
+            assert_eq!(key.get_u32("D512LogCalibration").unwrap(), log as u32);
+            for (name, expected) in [
+                ("D512Weight", 0.375_f64),
+                ("D512Margin", 0.625),
+                ("D512SuggestWeight", 0.12345678901234566),
+                ("D512SuggestMargin", 1.25),
+            ] {
+                assert_eq!(
+                    key.get_string(name)
+                        .unwrap()
+                        .parse::<f64>()
+                        .unwrap()
+                        .to_bits(),
+                    expected.to_bits()
+                );
+            }
+            let loaded = Config::from_reg().unwrap();
+            let file = TempFile::new();
+            export_config(file.name(), loaded).unwrap();
+            let imported = serde_json::to_value(import_config(file.name()).unwrap()).unwrap();
+            for field in [
+                "d512_mode",
+                "d512_weight",
+                "d512_margin",
+                "d512_suggest_weight",
+                "d512_suggest_margin",
+                "d512_log_calibration",
+            ] {
+                assert_eq!(
+                    imported["chewing_tsf"][field], wire["chewing_tsf"][field],
+                    "{field}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn d512_legacy_import_defaults_new_fields_without_overwriting_existing_parameters() {
+    let mut legacy = toml::Value::try_from(Config::default()).unwrap();
+    legacy["chewing_tsf"]["d512_weight"] = toml::Value::Float(0.75);
+    legacy["chewing_tsf"]["d512_margin"] = toml::Value::Float(0.375);
+    for field in [
+        "d512_suggest_weight",
+        "d512_suggest_margin",
+        "d512_log_calibration",
+    ] {
+        legacy["chewing_tsf"].as_table_mut().unwrap().remove(field);
+    }
+    let file = TempFile::new();
+    fs::write(&file.0, toml::to_string(&legacy).unwrap()).unwrap();
+    let imported = serde_json::to_value(import_config(file.name()).unwrap()).unwrap();
+    let settings = &imported["chewing_tsf"];
+    assert_eq!(settings["d512_weight"], 0.75);
+    assert_eq!(settings["d512_margin"], 0.375);
+    assert_eq!(settings["d512_suggest_weight"], 0.25);
+    assert_eq!(settings["d512_suggest_margin"], 2.0);
+    assert_eq!(settings["d512_log_calibration"], 0);
+}
+
+#[test]
+fn d512_invalid_suggestion_parameters_are_rejected_on_import_and_export() {
+    for mode in [0, 1, 2] {
+        for (weight, margin) in [
+            (-0.1, 2.0),
+            (0.25, -0.1),
+            (f64::NAN, 2.0),
+            (0.25, f64::INFINITY),
+        ] {
+            let mut input = toml::Value::try_from(Config::default()).unwrap();
+            input["chewing_tsf"]["d512_mode"] = toml::Value::Integer(mode);
+            input["chewing_tsf"]["d512_suggest_weight"] = toml::Value::Float(weight);
+            input["chewing_tsf"]["d512_suggest_margin"] = toml::Value::Float(margin);
+            let content = toml::to_string(&input).unwrap();
+            let cfg: Config = toml::from_str(&content).unwrap();
+            let output = TempFile::new();
+            assert!(export_config(output.name(), cfg).is_err());
+            assert!(!output.0.exists());
+            let file = TempFile::new();
+            fs::write(&file.0, content).unwrap();
+            assert!(import_config(file.name()).is_err());
+        }
+    }
+}
+
+#[test]
 fn d512_json_round_trip_preserves_representative_positive_f64_values() {
     let mut seed = 0x51220261017_u64;
     for _ in 0..1024 {

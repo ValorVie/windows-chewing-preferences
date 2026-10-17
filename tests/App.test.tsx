@@ -36,7 +36,8 @@ const storedConfig = {
     show_cand_with_space_key: false, advance_after_selection: false,
     default_full_space: false, default_english: false, output_simp_chinese: false,
     sel_key_type: 0, conv_engine: 1, cand_per_row: 5, cand_per_page: 10,
-    d512_mode: 1, d512_weight: 0.25, d512_margin: 0.25, d512_suggestion_accept_key: 0,
+    d512_mode: 1, d512_weight: 0.25, d512_margin: 0.5, d512_suggestion_accept_key: 0,
+    d512_suggest_weight: 0.25, d512_suggest_margin: 2, d512_log_calibration: 0,
     font_size: 16, font_family: "Test Font", font_fg_color: "#000000",
     font_bg_color: "#ffffff", font_highlight_fg_color: "#ffffff",
     font_highlight_bg_color: "#000000", font_number_fg_color: "#000000",
@@ -84,26 +85,32 @@ test("shows shared defaults and calibrated presets", async () => {
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("1");
   expect((screen.getByRole("combobox", { name: "D512 檔位" }) as HTMLSelectElement).value).toBe("balanced");
   expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25");
-  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.25");
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.5");
   expect((screen.getByRole("option", { name: "保守" }) as HTMLOptionElement).disabled).toBe(false);
   expect((screen.getByRole("option", { name: "積極" }) as HTMLOptionElement).disabled).toBe(false);
   const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;
   expect(accept.value).toBe("0");
   expect(accept.disabled).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "記錄 D512 校準資料" }) as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText(/紀錄包含您的個人打字資料，預設關閉/)).toBeTruthy();
   expect(screen.queryByText(/尚未接上儲存/)).toBeNull();
 });
 
 test.each([
-  ["conservative", "0.25", "0.8"],
-  ["balanced", "0.25", "0.25"],
-  ["aggressive", "0.15", "0.1"],
-])("selecting %s fills calibrated values, derives custom after editing and saves the pair", async (presetName, weightValue, marginValue) => {
+  [1, "conservative", "1", "d512_weight", "d512_margin"],
+  [1, "balanced", "0.5", "d512_weight", "d512_margin"],
+  [1, "aggressive", "0.2", "d512_weight", "d512_margin"],
+  [2, "conservative", "3", "d512_suggest_weight", "d512_suggest_margin"],
+  [2, "balanced", "2", "d512_suggest_weight", "d512_suggest_margin"],
+  [2, "aggressive", "1", "d512_suggest_weight", "d512_suggest_margin"],
+] as const)("mode %i selecting %s fills its own pair and derives custom after editing", async (mode, presetName, marginValue, weightKey, marginKey) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
   const user = await openD512();
   const preset = screen.getByRole("combobox", { name: "D512 檔位" });
   const weight = screen.getByRole("textbox", { name: "重排權重 w" });
   const margin = screen.getByRole("textbox", { name: "替換門檻 τ" });
   await user.selectOptions(preset, presetName);
-  expect((weight as HTMLInputElement).value).toBe(weightValue);
+  expect((weight as HTMLInputElement).value).toBe("0.25");
   expect((margin as HTMLInputElement).value).toBe(marginValue);
   expect((preset as HTMLSelectElement).value).toBe(presetName);
   await user.clear(margin);
@@ -115,7 +122,7 @@ test.each([
   await user.click(screen.getByRole("button", { name: "套用" }));
   expect(invoke).toHaveBeenCalledWith("save_config", { config: {
     ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf,
-      d512_weight: Number(weightValue), d512_margin: Number(marginValue) },
+      d512_mode: mode, [weightKey]: 0.25, [marginKey]: Number(marginValue) },
   } });
 });
 
@@ -178,12 +185,13 @@ test.each([-1, 3, 2147483647])("unknown acceptance key %i displays Tab while ret
   } });
 });
 
-test("retains mode 2 and explains that suggestion mode currently behaves as automatic", async () => {
+test("mode 2 is named suggestion without the unsupported disclaimer", async () => {
   const user = await openD512();
   const mode = screen.getByRole("combobox", { name: "D512 模式" });
   await user.selectOptions(mode, "2");
   expect((mode as HTMLSelectElement).value).toBe("2");
-  expect(screen.getByText("尚未支援，暫時等同自動")).toBeTruthy();
+  expect(screen.getByRole("option", { name: "僅建議" })).toBeTruthy();
+  expect(screen.queryByText(/尚未支援|暫時等同自動/)).toBeNull();
 });
 
 test("numeric edits derive custom without truncating decimal text, and balanced fills both values", async () => {
@@ -201,7 +209,7 @@ test("numeric edits derive custom without truncating decimal text, and balanced 
   await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
   await user.selectOptions(preset, "balanced");
   expect((weight as HTMLInputElement).value).toBe("0.25");
-  expect((margin as HTMLInputElement).value).toBe("0.25");
+  expect((margin as HTMLInputElement).value).toBe("2");
   expect((preset as HTMLSelectElement).value).toBe("balanced");
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("2");
 });
@@ -223,15 +231,15 @@ test("zero is valid, invalid drafts block apply and confirm, and correction re-e
   expect((apply as HTMLButtonElement).disabled).toBe(false);
 });
 
-test("turning mode off disables presets and keeps numeric fields editable", async () => {
+test("turning mode off disables presets and numeric fields while retaining the draft", async () => {
   const user = await openD512();
   const weight = screen.getByRole("textbox", { name: "重排權重 w" });
   const mode = screen.getByRole("combobox", { name: "D512 模式" });
   await user.clear(weight);
   await user.type(weight, "0.875");
   await user.selectOptions(mode, "0");
-  expect((weight as HTMLInputElement).disabled).toBe(false);
-  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).disabled).toBe(false);
+  expect((weight as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).disabled).toBe(true);
   expect((screen.getByRole("combobox", { name: "D512 檔位" }) as HTMLSelectElement).disabled).toBe(true);
   await user.selectOptions(mode, "1");
   expect((weight as HTMLInputElement).value).toBe("0.875");
@@ -239,9 +247,12 @@ test("turning mode off disables presets and keeps numeric fields editable", asyn
 });
 
 test.each([
-  ["重排權重 w", "d512_weight"],
-  ["替換門檻 τ", "d512_margin"],
-] as const)("invalid %s can be corrected after turning D512 off and saved from another tab", async (label, key) => {
+  [1, "重排權重 w", "d512_weight"],
+  [1, "替換門檻 τ", "d512_margin"],
+  [2, "重排權重 w", "d512_suggest_weight"],
+  [2, "替換門檻 τ", "d512_suggest_margin"],
+] as const)("mode %i invalid %s does not trap saving while off and remains correctable when re-enabled", async (mode, label, key) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
   const user = await openD512();
   const input = screen.getByRole("textbox", { name: label });
   const apply = screen.getByRole("button", { name: "套用" });
@@ -249,20 +260,29 @@ test.each([
   await user.clear(input);
   await user.type(input, "-0.1");
   await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "0");
-  expect((input as HTMLInputElement).disabled).toBe(false);
-  expect((apply as HTMLButtonElement).disabled).toBe(true);
-  expect((confirm as HTMLButtonElement).disabled).toBe(true);
-  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
-  await user.clear(input);
-  await user.type(input, "0.625");
+  expect((screen.getByRole("textbox", { name: label }) as HTMLInputElement).disabled).toBe(true);
   expect((apply as HTMLButtonElement).disabled).toBe(false);
   expect((confirm as HTMLButtonElement).disabled).toBe(false);
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
   await user.click(screen.getByRole("tab", { name: "打字行為" }));
   await user.click(screen.getByRole("checkbox", { name: "使用 Esc 清空編輯區字串" }));
   await user.click(apply);
   expect(invoke).toHaveBeenCalledWith("save_config", { config: {
     ...storedConfig,
-    chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, [key]: 0.625, esc_clean_all_buf: true },
+    chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, esc_clean_all_buf: true },
+  } });
+  await user.click(screen.getByRole("tab", { name: "其他設定" }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), String(mode));
+  const restored = screen.getByRole("textbox", { name: label }) as HTMLInputElement;
+  expect(restored.value).toBe("-0.1");
+  expect((apply as HTMLButtonElement).disabled).toBe(true);
+  await user.clear(restored);
+  await user.type(restored, "0.625");
+  expect((confirm as HTMLButtonElement).disabled).toBe(false);
+  await user.click(apply);
+  expect(invoke).toHaveBeenLastCalledWith("save_config", { config: {
+    ...storedConfig,
+    chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: mode, [key]: 0.625, esc_clean_all_buf: true },
   } });
 });
 
@@ -303,8 +323,8 @@ test("an invalid draft remains explained after switching away from its settings 
 
 test("loading shared settings preserves suggestion mode and custom numeric values", async () => {
   loadedConfig.chewing_tsf.d512_mode = 2;
-  loadedConfig.chewing_tsf.d512_weight = 0.375;
-  loadedConfig.chewing_tsf.d512_margin = 0.125;
+  loadedConfig.chewing_tsf.d512_suggest_weight = 0.375;
+  loadedConfig.chewing_tsf.d512_suggest_margin = 0.125;
   await openD512();
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("2");
   expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.375");
@@ -317,11 +337,16 @@ test("import replaces the draft with the imported shared settings", async () => 
   await user.clear(screen.getByRole("textbox", { name: "重排權重 w" }));
   importedConfig.chewing_tsf.d512_mode = 2;
   importedConfig.chewing_tsf.d512_weight = 0.75;
+  importedConfig.chewing_tsf.d512_suggest_weight = 0.875;
   importedConfig.chewing_tsf.d512_suggestion_accept_key = 1;
+  importedConfig.chewing_tsf.d512_log_calibration = 1;
   await act(async () => { await listeners.get("import")!(); });
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("2");
-  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.75");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.875");
   expect((screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement).value).toBe("1");
+  expect((screen.getByRole("checkbox", { name: "記錄 D512 校準資料" }) as HTMLInputElement).checked).toBe(true);
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "1");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.75");
   expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
@@ -329,13 +354,14 @@ test("export includes current unsaved D512 edits at f64 precision", async () => 
   const user = await openD512();
   await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
   await user.selectOptions(screen.getByRole("combobox", { name: "接受建議的按鍵" }), "2");
+  await user.click(screen.getByRole("checkbox", { name: "記錄 D512 校準資料" }));
   const margin = screen.getByRole("textbox", { name: "替換門檻 τ" });
   await user.clear(margin);
   await user.type(margin, "0.12345678901234566");
   await act(async () => { await listeners.get("export")!(); });
   expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: {
     ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 2,
-      d512_suggestion_accept_key: 2, d512_margin: 0.12345678901234566 },
+      d512_suggestion_accept_key: 2, d512_suggest_margin: 0.12345678901234566, d512_log_calibration: 1 },
   } });
 });
 
@@ -345,4 +371,85 @@ test("invalid D512 edits cannot be exported", async () => {
   await act(async () => { await listeners.get("export")!(); });
   expect(invoke.mock.calls.some(([command]) => command === "export_config")).toBe(false);
   expect(message).toHaveBeenCalled();
+});
+
+test.each([1, 2] as const)("editing both pairs from mode %i keeps the other pair independent through save and export", async (mode) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
+  loadedConfig.chewing_tsf.d512_weight = 0.375;
+  loadedConfig.chewing_tsf.d512_margin = 0.625;
+  loadedConfig.chewing_tsf.d512_suggest_weight = 0.875;
+  loadedConfig.chewing_tsf.d512_suggest_margin = 1.25;
+  const user = await openD512();
+  const modeSelect = screen.getByRole("combobox", { name: "D512 模式" });
+  const editPair = async (weight: string, margin: string) => {
+    const w = screen.getByRole("textbox", { name: "重排權重 w" });
+    const tau = screen.getByRole("textbox", { name: "替換門檻 τ" });
+    await user.clear(w);
+    await user.type(w, weight);
+    await user.clear(tau);
+    await user.type(tau, margin);
+  };
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe(mode === 1 ? "0.375" : "0.875");
+  await editPair("0.5", "0.75");
+  await user.selectOptions(modeSelect, mode === 1 ? "2" : "1");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe(mode === 1 ? "0.875" : "0.375");
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe(mode === 1 ? "1.25" : "0.625");
+  await editPair("0.625", "1.5");
+  await user.selectOptions(modeSelect, String(mode));
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.5");
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.75");
+  const values = mode === 1
+    ? { d512_weight: 0.5, d512_margin: 0.75, d512_suggest_weight: 0.625, d512_suggest_margin: 1.5 }
+    : { d512_weight: 0.625, d512_margin: 1.5, d512_suggest_weight: 0.5, d512_suggest_margin: 0.75 };
+  const expected = { ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: mode, ...values } };
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: expected });
+  await act(async () => { await listeners.get("export")!(); });
+  expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: expected });
+});
+
+test.each([0, 1])("calibration flag %i loads and can be toggled and saved with D512 off", async (initial) => {
+  loadedConfig.chewing_tsf.d512_log_calibration = initial;
+  const user = await openD512();
+  const log = screen.getByRole("checkbox", { name: "記錄 D512 校準資料" }) as HTMLInputElement;
+  expect(log.checked).toBe(initial === 1);
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
+  await user.click(log);
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "0");
+  expect(log.disabled).toBe(false);
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, d512_log_calibration: 1 - initial },
+  } });
+});
+
+test("off saves the latest successfully applied value instead of reverting it after an invalid edit", async () => {
+  const user = await openD512();
+  const weight = screen.getByRole("textbox", { name: "重排權重 w" });
+  await user.clear(weight);
+  await user.type(weight, "0.875");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  await user.clear(weight);
+  await user.type(weight, "-0.1");
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "0");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenLastCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, d512_weight: 0.875 },
+  } });
+  await act(async () => { await listeners.get("export")!(); });
+  expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 0, d512_weight: 0.875 },
+  } });
+});
+
+test("an invalid inactive pair still blocks saving while enabled and can be corrected by switching back", async () => {
+  const user = await openD512();
+  await user.clear(screen.getByRole("textbox", { name: "重排權重 w" }));
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25");
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(true);
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "1");
+  await user.type(screen.getByRole("textbox", { name: "重排權重 w" }), "0.25");
+  expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(false);
 });
