@@ -36,6 +36,8 @@ import { exit } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import KeybindingTab from "./KeybindingTab";
+import D512Settings from "./D512Settings";
+import { D512_DEFAULTS, d512ValueError, type D512Draft } from "./d512";
 
 type FontFamilyName = {
   name: string;
@@ -202,6 +204,12 @@ function App() {
   const [symbols_dat, setSymbolsDat] = React.useState<string>("");
   const [swkb_dat, setSwkbDat] = React.useState<string>("");
   const [showAdvanced, setShowAdvanced] = React.useState<boolean>(false);
+  const [d512Draft, setD512Draft] = React.useState<D512Draft>(() => ({
+    ...D512_DEFAULTS,
+  }));
+  const d512Invalid = Boolean(
+    d512ValueError(d512Draft.D512Weight) || d512ValueError(d512Draft.D512Margin),
+  );
 
   useEffect(() => {
     const unlisten_import = listen("import", async () => {
@@ -320,7 +328,11 @@ function App() {
     });
 
   return (
-    <form className={styles.root} name="configs">
+    <form
+      className={styles.root}
+      name="configs"
+      onSubmit={(event) => event.preventDefault()}
+    >
       <TabList
         appearance="subtle"
         selectedValue={selectedTab}
@@ -376,13 +388,25 @@ function App() {
         <Shortcut styles={styles} swkb_dat={swkb_dat} setSwkbDat={setSwkbDat} />
       )}
       {selectedTab === "6" && config && (
-        <Others config={config} styles={styles} setConfig={setConfig} />
+        <Others
+          config={config}
+          styles={styles}
+          setConfig={setConfig}
+          d512Draft={d512Draft}
+          setD512Draft={setD512Draft}
+        />
       )}
       {selectedTab === "keybind" && config && (
         <KeybindingTab keybind={config.keybind} setKeybind={setKeybind} />
       )}
+      {d512Invalid && (
+        <div role="alert" style={{ margin: "0 16px" }}>
+          請在「其他設定」修正 D512 數值後再套用。
+        </div>
+      )}
       <div className={styles.action}>
         <Button
+          disabled={d512Invalid}
           onClick={() => {
             save_config().then(() => exit(0));
           }}
@@ -390,7 +414,9 @@ function App() {
           確定
         </Button>
         <Button onClick={() => exit(0)}>取消</Button>
-        <Button onClick={save_config}>套用</Button>
+        <Button disabled={d512Invalid} onClick={save_config}>
+          套用
+        </Button>
       </div>
     </form>
   );
@@ -980,9 +1006,10 @@ const Shortcut = ({ styles, swkb_dat, setSwkbDat }) => (
   </div>
 );
 
-const Others = ({ config, styles, setConfig }) => (
+const Others = ({ config, styles, setConfig, d512Draft, setD512Draft }) => (
   <div className={styles.content} role="tabpanel" aria-labelledby="Others">
     <div className={styles.column}>
+      <D512Settings draft={d512Draft} onChange={setD512Draft} />
       <Field label="自動檢查更新：">
         <Dropdown
           value={update_channel_to_value(
