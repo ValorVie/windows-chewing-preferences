@@ -129,6 +129,58 @@ fn d512_json_and_registry_round_trip_preserves_raw_modes_and_f64_bits() {
 }
 
 #[test]
+fn d512_accept_key_round_trips_raw_values_through_json_registry_and_toml() {
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let registry = IsolatedRegistry::new();
+    let key = registry.root.open("Software\\ChewingTextService").unwrap();
+    for mode in [0, 1, 2] {
+        for raw in [0, 1, 2, 3, -1, i32::MIN, i32::MAX] {
+            let mut wire = serde_json::to_value(Config::default()).unwrap();
+            wire["chewing_tsf"]["d512_mode"] = mode.into();
+            wire["chewing_tsf"]["d512_suggestion_accept_key"] = raw.into();
+            let cfg: Config = serde_json::from_value(wire).unwrap();
+            assert_eq!(
+                serde_json::to_value(&cfg).unwrap()["chewing_tsf"]["d512_suggestion_accept_key"],
+                raw,
+                "JSON must retain the raw key"
+            );
+            cfg.save_reg();
+            assert_eq!(key.get_u32("D512SuggestionAcceptKey").unwrap(), raw as u32);
+            let loaded = Config::from_reg().unwrap();
+            assert_eq!(
+                serde_json::to_value(&loaded).unwrap()["chewing_tsf"]["d512_suggestion_accept_key"],
+                raw,
+                "disabled modes and unknown keys must survive registry reload"
+            );
+            let file = TempFile::new();
+            export_config(file.name(), loaded).unwrap();
+            let imported = import_config(file.name()).unwrap();
+            assert_eq!(
+                serde_json::to_value(&imported).unwrap()["chewing_tsf"]["d512_suggestion_accept_key"],
+                raw,
+                "TOML must retain the raw key"
+            );
+        }
+    }
+}
+
+#[test]
+fn d512_legacy_import_defaults_accept_key_to_tab() {
+    let mut legacy = toml::Value::try_from(Config::default()).unwrap();
+    legacy["chewing_tsf"]
+        .as_table_mut()
+        .unwrap()
+        .remove("d512_suggestion_accept_key");
+    let file = TempFile::new();
+    fs::write(&file.0, legacy.to_string()).unwrap();
+    let imported = import_config(file.name()).unwrap();
+    assert_eq!(
+        serde_json::to_value(&imported).unwrap()["chewing_tsf"]["d512_suggestion_accept_key"],
+        0
+    );
+}
+
+#[test]
 fn d512_json_round_trip_preserves_representative_positive_f64_values() {
     let mut seed = 0x51220261017_u64;
     for _ in 0..1024 {

@@ -36,7 +36,7 @@ const storedConfig = {
     show_cand_with_space_key: false, advance_after_selection: false,
     default_full_space: false, default_english: false, output_simp_chinese: false,
     sel_key_type: 0, conv_engine: 1, cand_per_row: 5, cand_per_page: 10,
-    d512_mode: 1, d512_weight: 0.25, d512_margin: 0.25,
+    d512_mode: 1, d512_weight: 0.25, d512_margin: 0.25, d512_suggestion_accept_key: 0,
     font_size: 16, font_family: "Test Font", font_fg_color: "#000000",
     font_bg_color: "#ffffff", font_highlight_fg_color: "#ffffff",
     font_highlight_bg_color: "#000000", font_number_fg_color: "#000000",
@@ -79,15 +79,103 @@ async function openD512() {
   return user;
 }
 
-test("shows shared defaults and unavailable presets", async () => {
+test("shows shared defaults and calibrated presets", async () => {
   await openD512();
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("1");
   expect((screen.getByRole("combobox", { name: "D512 檔位" }) as HTMLSelectElement).value).toBe("balanced");
   expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25");
   expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.25");
-  expect((screen.getByRole("option", { name: "保守（待校準）" }) as HTMLOptionElement).disabled).toBe(true);
-  expect((screen.getByRole("option", { name: "積極（待校準）" }) as HTMLOptionElement).disabled).toBe(true);
+  expect((screen.getByRole("option", { name: "保守" }) as HTMLOptionElement).disabled).toBe(false);
+  expect((screen.getByRole("option", { name: "積極" }) as HTMLOptionElement).disabled).toBe(false);
+  const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;
+  expect(accept.value).toBe("0");
+  expect(accept.disabled).toBe(true);
   expect(screen.queryByText(/尚未接上儲存/)).toBeNull();
+});
+
+test.each([
+  ["conservative", "0.25", "0.8"],
+  ["balanced", "0.25", "0.25"],
+  ["aggressive", "0.15", "0.1"],
+])("selecting %s fills calibrated values, derives custom after editing and saves the pair", async (presetName, weightValue, marginValue) => {
+  const user = await openD512();
+  const preset = screen.getByRole("combobox", { name: "D512 檔位" });
+  const weight = screen.getByRole("textbox", { name: "重排權重 w" });
+  const margin = screen.getByRole("textbox", { name: "替換門檻 τ" });
+  await user.selectOptions(preset, presetName);
+  expect((weight as HTMLInputElement).value).toBe(weightValue);
+  expect((margin as HTMLInputElement).value).toBe(marginValue);
+  expect((preset as HTMLSelectElement).value).toBe(presetName);
+  await user.clear(margin);
+  await user.type(margin, "0.625");
+  expect((preset as HTMLSelectElement).value).toBe("custom");
+  await user.selectOptions(preset, presetName);
+  await user.selectOptions(preset, "custom");
+  expect((preset as HTMLSelectElement).value).toBe(presetName);
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf,
+      d512_weight: Number(weightValue), d512_margin: Number(marginValue) },
+  } });
+});
+
+test.each([0, 1, 2])("acceptance key %i loads and can be selected and saved in suggestion mode", async (key) => {
+  loadedConfig.chewing_tsf.d512_mode = 2;
+  loadedConfig.chewing_tsf.d512_suggestion_accept_key = (key + 1) % 3;
+  const user = await openD512();
+  const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;
+  expect(accept.disabled).toBe(false);
+  expect(accept.value).toBe(String((key + 1) % 3));
+  expect(screen.getByRole("option", { name: ["Tab", "Ctrl+Tab", "右方向鍵（句尾）"][key] })).toBeTruthy();
+  await user.selectOptions(accept, String(key));
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 2, d512_suggestion_accept_key: key },
+  } });
+});
+
+test.each([0, 1] as const)("mode %i disables acceptance editing and preserves the chosen key when saving another tab", async (mode) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
+  loadedConfig.chewing_tsf.d512_suggestion_accept_key = 2;
+  const user = await openD512();
+  const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;
+  expect(accept.disabled).toBe(true);
+  expect(accept.value).toBe("2");
+  const modeSelect = screen.getByRole("combobox", { name: "D512 模式" });
+  await user.selectOptions(modeSelect, "2");
+  expect(accept.disabled).toBe(false);
+  expect(accept.value).toBe("2");
+  await user.selectOptions(modeSelect, String(mode));
+  expect(accept.disabled).toBe(true);
+  await user.click(screen.getByRole("tab", { name: "打字行為" }));
+  await user.click(screen.getByRole("checkbox", { name: "使用 Esc 清空編輯區字串" }));
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: mode,
+      d512_suggestion_accept_key: 2, esc_clean_all_buf: true },
+  } });
+});
+
+test.each([-1, 3, 2147483647])("unknown acceptance key %i displays Tab while retaining the raw value until edited", async (raw) => {
+  loadedConfig.chewing_tsf.d512_mode = 2;
+  loadedConfig.chewing_tsf.d512_suggestion_accept_key = raw;
+  const user = await openD512();
+  const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;
+  expect(accept.value).toBe("0");
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "1");
+  expect(accept.disabled).toBe(true);
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_suggestion_accept_key: raw },
+  } });
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
+  await user.selectOptions(accept, "1");
+  await user.selectOptions(accept, "0");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenLastCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 2, d512_suggestion_accept_key: 0 },
+  } });
 });
 
 test("retains mode 2 and explains that suggestion mode currently behaves as automatic", async () => {
@@ -229,20 +317,25 @@ test("import replaces the draft with the imported shared settings", async () => 
   await user.clear(screen.getByRole("textbox", { name: "重排權重 w" }));
   importedConfig.chewing_tsf.d512_mode = 2;
   importedConfig.chewing_tsf.d512_weight = 0.75;
+  importedConfig.chewing_tsf.d512_suggestion_accept_key = 1;
   await act(async () => { await listeners.get("import")!(); });
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("2");
   expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.75");
+  expect((screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement).value).toBe("1");
   expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
 test("export includes current unsaved D512 edits at f64 precision", async () => {
   const user = await openD512();
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
+  await user.selectOptions(screen.getByRole("combobox", { name: "接受建議的按鍵" }), "2");
   const margin = screen.getByRole("textbox", { name: "替換門檻 τ" });
   await user.clear(margin);
   await user.type(margin, "0.12345678901234566");
   await act(async () => { await listeners.get("export")!(); });
   expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: {
-    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_margin: 0.12345678901234566 },
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: 2,
+      d512_suggestion_accept_key: 2, d512_margin: 0.12345678901234566 },
   } });
 });
 

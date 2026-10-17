@@ -24,6 +24,17 @@ test.each(["0.25", "0.2500", ".25", "2.5e-1", "025e-2"])(
 );
 
 test.each([
+  [{ D512Weight: "0.25", D512Margin: "0.80" }, "conservative"],
+  [{ D512Weight: "025e-2", D512Margin: ".8000" }, "conservative"],
+  [{ D512Weight: "0.15", D512Margin: "0.10" }, "aggressive"],
+  [{ D512Weight: "15e-2", D512Margin: "1e-1" }, "aggressive"],
+  [{ D512Weight: "0.25", D512Margin: "0.80000000000000001" }, "custom"],
+  [{ D512Weight: "0.15000000000000001", D512Margin: "0.10" }, "custom"],
+] as const)("derives calibrated preset for %j as %s", (values, expected) => {
+  expect(d512Preset(values)).toBe(expected);
+});
+
+test.each([
   { D512Weight: "0.25000000000000001", D512Margin: "0.25" },
   { D512Weight: "0.25", D512Margin: "0.25000000000000001" },
   { D512Weight: "0", D512Margin: "0.25" },
