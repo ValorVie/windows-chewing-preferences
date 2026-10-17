@@ -17,7 +17,7 @@ status: implemented
 
 以主線 `141a10aa9e822ec4511b4bf47c21691c51ad6775` 為基準：前端使用 React、Fluent UI 與 Vite，後端使用 Tauri 2。`src/App.tsx` 管理目前設定與七個分頁，`src/config.tsx` 宣告前端型別；Rust 的 `src-tauri/src/config.rs` 使用 `chewing_tip_core::config::Config` 載入、儲存及匯入／匯出設定。
 
-階段 1 的原樣主線建置通過：以 stable Rust/Cargo 1.99.1 對未修改的上游程式碼執行完整 Windows Release 建置，exit 0。主線 `windows` 依賴的多行 inline table 使用 TOML 1.1；先前為 Cargo 1.91.1 加入的語法相容修正已用 `git revert` 撤回，未改寫歷史。後續的 manifest 差異為 D512 共用設定 path patch、測試依賴及 JSON 精度功能。
+階段 1 的原樣主線建置通過：以 stable Rust/Cargo 1.99.1 對未修改的上游程式碼執行完整 Windows Release 建置，exit 0。主線 `windows` 依賴的多行 inline table 使用 TOML 1.1；先前為 Cargo 1.91.1 加入的語法相容修正已用 `git revert` 撤回，未改寫歷史。後續的 manifest 差異為 D512 共用設定 git patch、測試依賴及 JSON 精度功能。
 
 文案直接寫在 TSX、Rust 選單及 Tauri 設定中，目前沒有獨立 i18n 函式庫或翻譯目錄。新增文案沿用繁體中文，不為此功能建立另一套翻譯架構。
 
@@ -55,7 +55,7 @@ status: implemented
 
 `src/d512.ts` 在 UI 草稿保留四個數值的原文。模式保留 0／1／2，接受鍵與紀錄開關對應共用 i32 欄位；檔位延續本分支的十進位有效數字比對，避免將編輯中的 `0.25000000000000001` 捨入成平衡檔。
 
-Cargo path patch 使用 repo 內忽略追蹤的 `.c3-deps/final2/windows-chewing-tsf/crates/chewing_tip_core`，並以 `.c3-deps/final2/libchewing` 提供 core 所需的 `d512` feature。建置前用 `git archive` 從指定 commit 建立這兩份快照；實際版本與封存檔雜湊記錄在每次交接。preferences 直接依賴的舊版 chewing 維持不變。前端沿用現有 `load_config`、`save_config`、匯入與匯出流程；實際登錄讀寫仍使用共用型別的 `from_reg`／`save_reg`。
+Cargo patch 使用 [ValorVie/windows-chewing-tsf](https://github.com/ValorVie/windows-chewing-tsf) 的 `chewing_tip_core`，並以 [ValorVie/libchewing](https://github.com/ValorVie/libchewing) 提供 core 所需的 `d512` feature；兩者皆選用 `valor-feature` 分支。clone 此 repo 後，Cargo 會依 `Cargo.lock` 取得共用 core 與引擎，建置時保留 `--locked`。主線 `[dependencies]` 的 Codeberg git 與 `chewing 0.13.0-alpha.2` 需求保持原樣，只以 patch 指向公開 fork；core 使用的 `chewing 0.14.0-alpha.4` 也維持原版本。前端沿用現有 `load_config`、`save_config`、匯入與匯出流程；實際登錄讀寫仍使用共用型別的 `from_reg`／`save_reg`。
 
 共用契約在 `HKCU\Software\ChewingTextService` 保存以下欄位；實際鍵名及預設值的唯一實作留在 TSF：
 

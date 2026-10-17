@@ -489,6 +489,7 @@ dependencies = [
 [[package]]
 name = "chewing"
 version = "0.14.0-alpha.4"
+source = "git+https://github.com/ValorVie/libchewing.git?branch=valor-feature#3e69d8bcf85b874b81a530eb68679b7d01e9db65"
 dependencies = [
  "bstr",
  "der",
@@ -519,6 +520,7 @@ dependencies = [
 [[package]]
 name = "chewing_tip_core"
 version = "26.9.0"
+source = "git+https://github.com/ValorVie/windows-chewing-tsf.git?branch=valor-feature#93c2b30a4ba0c5268bc9137628351ad852f1f054"
 dependencies = [
  "base64 0.22.1",
  "base64-serde",
