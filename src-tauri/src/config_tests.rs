@@ -172,7 +172,7 @@ fn d512_legacy_import_defaults_accept_key_to_tab() {
         .unwrap()
         .remove("d512_suggestion_accept_key");
     let file = TempFile::new();
-    fs::write(&file.0, legacy.to_string()).unwrap();
+    fs::write(&file.0, toml::to_string(&legacy).unwrap()).unwrap();
     let imported = import_config(file.name()).unwrap();
     assert_eq!(
         serde_json::to_value(&imported).unwrap()["chewing_tsf"]["d512_suggestion_accept_key"],

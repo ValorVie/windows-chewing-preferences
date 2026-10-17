@@ -16,6 +16,9 @@ dist
 dist-ssr
 *.local
 
+# Fixed dependency snapshots for the D512 build.
+.c3-deps/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
