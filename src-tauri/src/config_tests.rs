@@ -289,8 +289,14 @@ fn d512_invalid_suggestion_parameters_are_rejected_on_import_and_export() {
         ] {
             let mut input = toml::Value::try_from(Config::default()).unwrap();
             input["chewing_tsf"]["d512_mode"] = toml::Value::Integer(mode);
-            input["chewing_tsf"]["d512_suggest_weight"] = toml::Value::Float(weight);
-            input["chewing_tsf"]["d512_suggest_margin"] = toml::Value::Float(margin);
+            input["chewing_tsf"]
+                .as_table_mut()
+                .unwrap()
+                .insert("d512_suggest_weight".into(), toml::Value::Float(weight));
+            input["chewing_tsf"]
+                .as_table_mut()
+                .unwrap()
+                .insert("d512_suggest_margin".into(), toml::Value::Float(margin));
             let content = toml::to_string(&input).unwrap();
             let cfg: Config = toml::from_str(&content).unwrap();
             let output = TempFile::new();

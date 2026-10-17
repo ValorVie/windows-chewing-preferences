@@ -208,10 +208,13 @@ test("numeric edits derive custom without truncating decimal text, and balanced 
   expect((margin as HTMLInputElement).value).toBe("0.37512345678912345");
   await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
   await user.selectOptions(preset, "balanced");
-  expect((weight as HTMLInputElement).value).toBe("0.25");
-  expect((margin as HTMLInputElement).value).toBe("2");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25");
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("2");
   expect((preset as HTMLSelectElement).value).toBe("balanced");
   expect((screen.getByRole("combobox", { name: "D512 模式" }) as HTMLSelectElement).value).toBe("2");
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "1");
+  expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25000000000000001");
+  expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.37512345678912345");
 });
 
 test("zero is valid, invalid drafts block apply and confirm, and correction re-enables them", async () => {
@@ -402,6 +405,12 @@ test.each([1, 2] as const)("editing both pairs from mode %i keeps the other pair
     ? { d512_weight: 0.5, d512_margin: 0.75, d512_suggest_weight: 0.625, d512_suggest_margin: 1.5 }
     : { d512_weight: 0.625, d512_margin: 1.5, d512_suggest_weight: 0.5, d512_suggest_margin: 0.75 };
   const expected = { ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf, d512_mode: mode, ...values } };
+  await user.selectOptions(modeSelect, "0");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...expected, chewing_tsf: { ...expected.chewing_tsf, d512_mode: 0 },
+  } });
+  await user.selectOptions(modeSelect, String(mode));
   await user.click(screen.getByRole("button", { name: "套用" }));
   expect(invoke).toHaveBeenCalledWith("save_config", { config: expected });
   await act(async () => { await listeners.get("export")!(); });

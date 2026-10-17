@@ -40,7 +40,7 @@ import D512Settings from "./D512Settings";
 import {
   D512_DEFAULTS,
   d512DraftFromConfig,
-  d512ValueError,
+  d512DraftHasErrors,
   withD512Draft,
   type D512Draft,
 } from "./d512";
@@ -213,9 +213,7 @@ function App() {
   const [d512Draft, setD512Draft] = React.useState<D512Draft>(() => ({
     ...D512_DEFAULTS,
   }));
-  const d512Invalid = Boolean(
-    d512ValueError(d512Draft.D512Weight) || d512ValueError(d512Draft.D512Margin),
-  );
+  const d512Invalid = d512Draft.D512Mode !== 0 && d512DraftHasErrors(d512Draft);
 
   useEffect(() => {
     const unlisten_import = listen("import", async () => {
@@ -336,8 +334,19 @@ function App() {
 
   const save_config = () => {
     if (!config || d512Invalid) return Promise.reject(new Error("設定尚未就緒或 D512 數值無效"));
+    const saved = withD512Draft(config, d512Draft);
     return invoke("save_config", {
-      config: { chewing_tsf: withD512Draft(config, d512Draft), symbols_dat, swkb_dat },
+      config: { chewing_tsf: saved, symbols_dat, swkb_dat },
+    }).then(() => {
+      // Keep the last successful values as the fallback for invalid off-mode
+      // drafts, without replacing other edits made while the save was pending.
+      setConfig((current) => current && ({
+        ...current,
+        d512_weight: saved.d512_weight,
+        d512_margin: saved.d512_margin,
+        d512_suggest_weight: saved.d512_suggest_weight,
+        d512_suggest_margin: saved.d512_suggest_margin,
+      }));
     });
   };
 
@@ -415,7 +424,7 @@ function App() {
       )}
       {d512Invalid && (
         <div role="alert" style={{ margin: "0 16px" }}>
-          請在「其他設定」修正 D512 數值後再套用。
+          請在「其他設定」檢查自動及僅建議模式的 D512 數值後再套用。
         </div>
       )}
       <div className={styles.action}>

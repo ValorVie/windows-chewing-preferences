@@ -17,9 +17,14 @@ fn validate_d512(config: &Config) -> Result<(), String> {
     if !(0..=2).contains(&settings.d512_mode) {
         return Err("D512 模式必須為 0、1 或 2。".into());
     }
-    if [settings.d512_weight, settings.d512_margin]
-        .into_iter()
-        .any(|value| !value.is_finite() || value < 0.0)
+    if [
+        settings.d512_weight,
+        settings.d512_margin,
+        settings.d512_suggest_weight,
+        settings.d512_suggest_margin,
+    ]
+    .into_iter()
+    .any(|value| !value.is_finite() || value < 0.0)
     {
         return Err("D512 權重與門檻必須是大於或等於 0 的有限數值。".into());
     }

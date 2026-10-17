@@ -9,42 +9,69 @@ export type D512Mode = 0 | 1 | 2;
 export type D512Draft = {
   D512Mode: D512Mode;
   D512SuggestionAcceptKey: number;
+  D512LogCalibration: number;
   D512Weight: string;
   D512Margin: string;
+  D512SuggestWeight: string;
+  D512SuggestMargin: string;
 };
 
 export const D512_DEFAULTS: Readonly<D512Draft> = {
   D512Mode: 1,
   D512SuggestionAcceptKey: 0,
+  D512LogCalibration: 0,
   D512Weight: "0.25",
-  D512Margin: "0.25",
+  D512Margin: "0.5",
+  D512SuggestWeight: "0.25",
+  D512SuggestMargin: "2",
 };
 
 export const D512_PRESETS = {
-  conservative: { D512Weight: "0.25", D512Margin: "0.8" },
-  balanced: { D512Weight: "0.25", D512Margin: "0.25" },
-  aggressive: { D512Weight: "0.15", D512Margin: "0.1" },
+  automatic: {
+    conservative: { D512Weight: "0.25", D512Margin: "1" },
+    balanced: { D512Weight: "0.25", D512Margin: "0.5" },
+    aggressive: { D512Weight: "0.25", D512Margin: "0.2" },
+  },
+  suggestion: {
+    conservative: { D512Weight: "0.25", D512Margin: "3" },
+    balanced: { D512Weight: "0.25", D512Margin: "2" },
+    aggressive: { D512Weight: "0.25", D512Margin: "1" },
+  },
 } as const;
 
 export function d512DraftFromConfig(config: ChewingTsfConfig): D512Draft {
   return {
     D512Mode: config.d512_mode,
     D512SuggestionAcceptKey: config.d512_suggestion_accept_key,
+    D512LogCalibration: config.d512_log_calibration,
     D512Weight: String(config.d512_weight),
     D512Margin: String(config.d512_margin),
+    D512SuggestWeight: String(config.d512_suggest_weight),
+    D512SuggestMargin: String(config.d512_suggest_margin),
   };
 }
 
+export function d512DraftHasErrors(draft: D512Draft): boolean {
+  return (["D512Weight", "D512Margin", "D512SuggestWeight", "D512SuggestMargin"] as const)
+    .some((key) => Boolean(d512ValueError(draft[key])));
+}
+
 export function withD512Draft(config: ChewingTsfConfig, draft: D512Draft): ChewingTsfConfig {
-  if (d512ValueError(draft.D512Weight) || d512ValueError(draft.D512Margin)) {
+  if (draft.D512Mode !== 0 && d512DraftHasErrors(draft)) {
     throw new Error("D512 數值無效");
   }
+  // Off mode disables editing; retain saved values for invalid drafts so they
+  // cannot trap Apply or cross the Rust validation boundary.
+  const value = (text: string, saved: number) => d512ValueError(text) ? saved : Number(text);
   return {
     ...config,
     d512_mode: draft.D512Mode,
     d512_suggestion_accept_key: draft.D512SuggestionAcceptKey,
-    d512_weight: Number(draft.D512Weight),
-    d512_margin: Number(draft.D512Margin),
+    d512_log_calibration: draft.D512LogCalibration,
+    d512_weight: value(draft.D512Weight, config.d512_weight),
+    d512_margin: value(draft.D512Margin, config.d512_margin),
+    d512_suggest_weight: value(draft.D512SuggestWeight, config.d512_suggest_weight),
+    d512_suggest_margin: value(draft.D512SuggestMargin, config.d512_suggest_margin),
   };
 }
 
@@ -62,7 +89,9 @@ export function d512ValueError(text: string): string | undefined {
 
 export function d512Preset(
   draft: Pick<D512Draft, "D512Weight" | "D512Margin">,
-): keyof typeof D512_PRESETS | "custom" {
+  mode: D512Mode = 1,
+): keyof typeof D512_PRESETS.automatic | "custom" {
+  const presets = D512_PRESETS[mode === 2 ? "suggestion" : "automatic"];
   // Compare decimal digits, without rounding edited text through Number first.
   const decimalKey = (text: string) => {
     if (d512ValueError(text)) return undefined;
@@ -79,8 +108,8 @@ export function d512Preset(
   };
   const weight = decimalKey(draft.D512Weight);
   const margin = decimalKey(draft.D512Margin);
-  for (const name of Object.keys(D512_PRESETS) as (keyof typeof D512_PRESETS)[]) {
-    const preset = D512_PRESETS[name];
+  for (const name of Object.keys(presets) as (keyof typeof presets)[]) {
+    const preset = presets[name];
     if (weight === decimalKey(preset.D512Weight) && margin === decimalKey(preset.D512Margin)) {
       return name;
     }

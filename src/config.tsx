@@ -28,8 +28,11 @@ export type ChewingTsfConfig = {
   conv_engine: number;
   d512_mode: 0 | 1 | 2;
   d512_suggestion_accept_key: number;
+  d512_log_calibration: number;
   d512_weight: number;
   d512_margin: number;
+  d512_suggest_weight: number;
+  d512_suggest_margin: number;
   cand_per_row: number;
   cand_per_page: number;
   font_size: number;
