@@ -75,6 +75,81 @@ impl Drop for IsolatedRegistry {
 }
 
 #[test]
+fn input_habits_defaults_and_legacy_import_use_shared_core() {
+    let defaults = serde_json::to_value(Config::default()).unwrap();
+    assert_eq!(defaults["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(defaults["chewing_tsf"]["cursor_wrap"], false);
+    let mut legacy = toml::Value::try_from(Config::default()).unwrap();
+    let settings = legacy["chewing_tsf"].as_table_mut().unwrap();
+    settings.remove("ctrl_symbol_new_phonetic");
+    settings.remove("cursor_wrap");
+    let file = TempFile::new();
+    fs::write(&file.0, toml::to_string(&legacy).unwrap()).unwrap();
+    let imported = serde_json::to_value(import_config(file.name()).unwrap()).unwrap();
+    assert_eq!(imported["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(imported["chewing_tsf"]["cursor_wrap"], false);
+
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let _registry = IsolatedRegistry::new();
+    let loaded = serde_json::to_value(Config::from_reg().unwrap()).unwrap();
+    assert_eq!(loaded["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(loaded["chewing_tsf"]["cursor_wrap"], false);
+}
+
+#[test]
+fn input_habits_round_trip_and_survive_other_setting_edits() {
+    let pairs = [(true, false), (false, true), (true, true), (false, false)];
+    // Detect a core that drops unknown fields before acquiring the registry
+    // lock, so expected RED failures cannot poison the other registry tests.
+    for (ctrl, wrap) in pairs {
+        let mut wire = serde_json::to_value(Config::default()).unwrap();
+        wire["chewing_tsf"]["ctrl_symbol_new_phonetic"] = ctrl.into();
+        wire["chewing_tsf"]["cursor_wrap"] = wrap.into();
+        let cfg: Config = serde_json::from_value(wire).unwrap();
+        let actual = serde_json::to_value(cfg).unwrap();
+        assert_eq!(actual["chewing_tsf"]["ctrl_symbol_new_phonetic"], ctrl);
+        assert_eq!(actual["chewing_tsf"]["cursor_wrap"], wrap);
+    }
+
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let registry = IsolatedRegistry::new();
+    let key = registry.root.open("Software\\ChewingTextService").unwrap();
+    for (ctrl, wrap) in pairs {
+        let mut wire = serde_json::to_value(Config::default()).unwrap();
+        wire["chewing_tsf"]["ctrl_symbol_new_phonetic"] = ctrl.into();
+        wire["chewing_tsf"]["cursor_wrap"] = wrap.into();
+        let cfg: Config = serde_json::from_value(wire).unwrap();
+        cfg.save_reg();
+        assert_eq!(
+            key.get_u32("CtrlSymbolNewPhonetic").unwrap(),
+            u32::from(ctrl)
+        );
+        assert_eq!(key.get_u32("CursorWrap").unwrap(), u32::from(wrap));
+        let loaded = Config::from_reg().unwrap();
+        let actual = serde_json::to_value(&loaded).unwrap();
+        assert_eq!(actual["chewing_tsf"]["ctrl_symbol_new_phonetic"], ctrl);
+        assert_eq!(actual["chewing_tsf"]["cursor_wrap"], wrap);
+        let file = TempFile::new();
+        export_config(file.name(), loaded).unwrap();
+        let mut imported = import_config(file.name()).unwrap();
+        let actual = serde_json::to_value(&imported).unwrap();
+        assert_eq!(actual["chewing_tsf"]["ctrl_symbol_new_phonetic"], ctrl);
+        assert_eq!(actual["chewing_tsf"]["cursor_wrap"], wrap);
+        imported.chewing_tsf.esc_clean_all_buf = true;
+        imported.save_reg();
+        assert_eq!(
+            key.get_u32("CtrlSymbolNewPhonetic").unwrap(),
+            u32::from(ctrl)
+        );
+        assert_eq!(key.get_u32("CursorWrap").unwrap(), u32::from(wrap));
+        let reloaded = serde_json::to_value(Config::from_reg().unwrap()).unwrap();
+        assert_eq!(reloaded["chewing_tsf"]["ctrl_symbol_new_phonetic"], ctrl);
+        assert_eq!(reloaded["chewing_tsf"]["cursor_wrap"], wrap);
+        assert_eq!(reloaded["chewing_tsf"]["esc_clean_all_buf"], true);
+    }
+}
+
+#[test]
 fn d512_json_and_registry_round_trip_preserves_raw_modes_and_f64_bits() {
     let _lock = REGISTRY_LOCK.lock().unwrap();
     let registry = IsolatedRegistry::new();

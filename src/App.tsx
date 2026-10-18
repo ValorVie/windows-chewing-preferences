@@ -484,6 +484,14 @@ const InputBehaviors = ({
         checked={config?.esc_clean_all_buf}
         onChange={setBooleanConfig}
       />
+      <Field hint="組字中按 Ctrl+， 。 ； ' [ ] 輸入，。；、【】">
+        <Checkbox
+          label="ctrl符號輸出(新注音模式)"
+          name="ctrl_symbol_new_phonetic"
+          checked={config?.ctrl_symbol_new_phonetic}
+          onChange={setBooleanConfig}
+        />
+      </Field>
       <Checkbox
         label="使用 Shift 輸入全形標點符號"
         name="full_shape_symbols"
@@ -546,6 +554,14 @@ const InputBehaviors = ({
         checked={config?.cursor_cand_list}
         onChange={setBooleanConfig}
       />
+      <Field hint="游標在組字區最右邊時按右方向鍵跳到最左邊，反之亦然">
+        <Checkbox
+          label="組字區游標左右循環"
+          name="cursor_wrap"
+          checked={config?.cursor_wrap}
+          onChange={setBooleanConfig}
+        />
+      </Field>
       <Checkbox
         label="按空白鍵叫出選字視窗"
         name="show_cand_with_space_key"

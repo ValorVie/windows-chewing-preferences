@@ -11,6 +11,8 @@ export type ChewingTsfConfig = {
   show_notification: boolean;
   enable_auto_learn: boolean;
   esc_clean_all_buf: boolean;
+  ctrl_symbol_new_phonetic: boolean;
+  cursor_wrap: boolean;
   full_shape_symbols: boolean;
   upper_case_with_shift: boolean;
   add_phrase_forward: boolean;

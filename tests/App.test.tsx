@@ -29,6 +29,7 @@ const storedConfig = {
     enable_fullwidth_toggle_key: false, enable_caps_lock: false,
     lock_chinese_on_caps_lock: false, show_notification: false,
     enable_auto_learn: false, esc_clean_all_buf: false,
+    ctrl_symbol_new_phonetic: true, cursor_wrap: false,
     full_shape_symbols: false, upper_case_with_shift: false,
     add_phrase_forward: false, phrase_choice_rearward: false,
     easy_symbols_with_shift: false, easy_symbols_with_shift_ctrl: false,
@@ -79,6 +80,66 @@ async function openD512() {
   await user.click(screen.getByRole("tab", { name: "其他設定" }));
   return user;
 }
+
+test.each([
+  [true, false], [false, true], [true, true], [false, false],
+])("input habits %s/%s load and toggle independently before saving", async (ctrl, wrap) => {
+  loadedConfig.chewing_tsf.ctrl_symbol_new_phonetic = ctrl;
+  loadedConfig.chewing_tsf.cursor_wrap = wrap;
+  const user = userEvent.setup();
+  render(<App />);
+  const ctrlBox = await screen.findByRole<HTMLInputElement>("checkbox", { name: "ctrl符號輸出(新注音模式)" });
+  const wrapBox = screen.getByRole<HTMLInputElement>("checkbox", { name: "組字區游標左右循環" });
+  expect(ctrlBox.checked).toBe(ctrl);
+  expect(wrapBox.checked).toBe(wrap);
+  expect(screen.getByText("組字中按 Ctrl+， 。 ； ' [ ] 輸入，。；、【】")).toBeTruthy();
+  expect(screen.getByText("游標在組字區最右邊時按右方向鍵跳到最左邊，反之亦然")).toBeTruthy();
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
+  await user.click(ctrlBox);
+  expect(ctrlBox.checked).toBe(!ctrl);
+  expect(wrapBox.checked).toBe(wrap);
+  await user.click(wrapBox);
+  expect(ctrlBox.checked).toBe(!ctrl);
+  expect(wrapBox.checked).toBe(!wrap);
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf,
+      ctrl_symbol_new_phonetic: !ctrl, cursor_wrap: !wrap },
+  } });
+});
+
+test.each([
+  [true, false], [false, true], [true, true], [false, false],
+])("saving another tab preserves loaded input habits %s/%s", async (ctrl, wrap) => {
+  loadedConfig.chewing_tsf.ctrl_symbol_new_phonetic = ctrl;
+  loadedConfig.chewing_tsf.cursor_wrap = wrap;
+  const user = await openD512();
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf,
+      d512_mode: 2, ctrl_symbol_new_phonetic: ctrl, cursor_wrap: wrap },
+  } });
+});
+
+test("import loads both input habits and export retains edits after changing tabs", async () => {
+  const user = await openD512();
+  importedConfig.chewing_tsf.ctrl_symbol_new_phonetic = false;
+  importedConfig.chewing_tsf.cursor_wrap = true;
+  await act(async () => { await listeners.get("import")!(); });
+  await user.click(screen.getByRole("tab", { name: "打字行為" }));
+  const ctrlBox = screen.getByRole<HTMLInputElement>("checkbox", { name: "ctrl符號輸出(新注音模式)" });
+  const wrapBox = screen.getByRole<HTMLInputElement>("checkbox", { name: "組字區游標左右循環" });
+  expect(ctrlBox.checked).toBe(false);
+  expect(wrapBox.checked).toBe(true);
+  await user.click(wrapBox);
+  await user.click(screen.getByRole("tab", { name: "其他設定" }));
+  await act(async () => { await listeners.get("export")!(); });
+  expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: {
+    ...storedConfig, chewing_tsf: { ...storedConfig.chewing_tsf,
+      ctrl_symbol_new_phonetic: false, cursor_wrap: false },
+  } });
+});
 
 test("shows shared defaults and calibrated presets", async () => {
   await openD512();
