@@ -29,6 +29,7 @@ const storedConfig = {
     enable_fullwidth_toggle_key: false, enable_caps_lock: false,
     lock_chinese_on_caps_lock: false, show_notification: false,
     enable_auto_learn: false, esc_clean_all_buf: false,
+    use_personal_candidate_preference: true,
     ctrl_symbol_new_phonetic: true, cursor_wrap: false,
     full_shape_symbols: false, upper_case_with_shift: false,
     add_phrase_forward: false, phrase_choice_rearward: false,
@@ -39,6 +40,7 @@ const storedConfig = {
     sel_key_type: 0, conv_engine: 1, cand_per_row: 5, cand_per_page: 10,
     d512_mode: 1, d512_weight: 0.25, d512_margin: 0.5, d512_suggestion_accept_key: 0,
     d512_suggest_weight: 0.25, d512_suggest_margin: 2, d512_log_calibration: 0,
+    d512_personal_bonus: 2, d512_suggest_personal_bonus: 2,
     font_size: 16, font_family: "Test Font", font_fg_color: "#000000",
     font_bg_color: "#ffffff", font_highlight_fg_color: "#ffffff",
     font_highlight_bg_color: "#000000", font_number_fg_color: "#000000",
@@ -80,6 +82,119 @@ async function openD512() {
   await user.click(screen.getByRole("tab", { name: "其他設定" }));
   return user;
 }
+
+test.each([true, false])("personal preference %s loads from core and saves independently of auto learning", async (enabled) => {
+  loadedConfig.chewing_tsf.use_personal_candidate_preference = enabled;
+  const user = userEvent.setup();
+  render(<App />);
+  const checkbox = await screen.findByRole<HTMLInputElement>("checkbox", { name: "使用個人選字偏好" });
+  expect(checkbox.checked).toBe(enabled);
+  expect(screen.getByText("記住有效送出的手動選字，依近期偏好直接組字並調整多字詞的候選順序。關閉會保留記錄。")).toBeTruthy();
+  expect(invoke.mock.calls.some(([command]) => command === "save_config")).toBe(false);
+  await user.click(checkbox);
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...loadedConfig, chewing_tsf: { ...loadedConfig.chewing_tsf, use_personal_candidate_preference: !enabled },
+  } });
+});
+
+test.each([1, 2])("mode %i edits only its personal bonus and every preset preserves both bonuses", async (mode) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
+  loadedConfig.chewing_tsf.d512_personal_bonus = 0.625;
+  loadedConfig.chewing_tsf.d512_suggest_personal_bonus = 1.875;
+  const user = await openD512();
+  const bonus = () => screen.getByRole<HTMLInputElement>("textbox", { name: "個人學習加分 b" });
+  expect(screen.getAllByRole("textbox", { name: "個人學習加分 b" })).toHaveLength(1);
+  expect(bonus().value).toBe(mode === 1 ? "0.625" : "1.875");
+  await user.clear(bonus());
+  await user.type(bonus(), "3.125");
+  const otherMode = mode === 1 ? 2 : 1;
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), String(otherMode));
+  expect(bonus().value).toBe(mode === 1 ? "1.875" : "0.625");
+  for (const activeMode of [mode, otherMode]) {
+    await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), String(activeMode));
+    const before = bonus().value;
+    for (const preset of ["conservative", "aggressive", "balanced"]) {
+      await user.selectOptions(screen.getByRole("combobox", { name: "D512 檔位" }), preset);
+      expect(bonus().value).toBe(before);
+    }
+  }
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), String(mode));
+  expect(bonus().value).toBe("3.125");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...loadedConfig, chewing_tsf: { ...loadedConfig.chewing_tsf,
+      [mode === 1 ? "d512_personal_bonus" : "d512_suggest_personal_bonus"]: 3.125 },
+  } });
+});
+
+test.each([1, 2])("mode %i saves zero bonus and preserves personal settings when saving another tab", async (mode) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
+  loadedConfig.chewing_tsf.use_personal_candidate_preference = false;
+  loadedConfig.chewing_tsf.d512_personal_bonus = 0.625;
+  loadedConfig.chewing_tsf.d512_suggest_personal_bonus = 1.875;
+  const user = await openD512();
+  const bonus = screen.getByRole("textbox", { name: "個人學習加分 b" });
+  await user.clear(bonus);
+  await user.type(bonus, "0");
+  await user.click(screen.getByRole("tab", { name: "打字行為" }));
+  await user.click(screen.getByRole("checkbox", { name: "使用 Esc 清空編輯區字串" }));
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...loadedConfig, chewing_tsf: { ...loadedConfig.chewing_tsf, esc_clean_all_buf: true,
+      [mode === 1 ? "d512_personal_bonus" : "d512_suggest_personal_bonus"]: 0 },
+  } });
+});
+
+test.each([1, 2])("mode %i rejects invalid bonuses including hidden drafts and retains the latest valid saved fallback", async (mode) => {
+  loadedConfig.chewing_tsf.d512_mode = mode;
+  const user = await openD512();
+  const bonus = () => screen.getByRole<HTMLInputElement>("textbox", { name: "個人學習加分 b" });
+  await user.clear(bonus());
+  await user.type(bonus(), "1.66530964545728732");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  invoke.mockClear();
+  for (const invalid of ["", "-0.1", "NaN", "Infinity", "1e309"]) {
+    await user.clear(bonus());
+    if (invalid) await user.type(bonus(), invalid);
+    expect(bonus().getAttribute("aria-invalid")).toBe("true");
+    expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "確定" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { await listeners.get("export")!(); });
+    expect(invoke.mock.calls.some(([command]) => command === "export_config")).toBe(false);
+  }
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), String(mode === 1 ? 2 : 1));
+  expect((screen.getByRole("button", { name: "套用" }) as HTMLButtonElement).disabled).toBe(true);
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "0");
+  await user.click(screen.getByRole("button", { name: "套用" }));
+  expect(invoke).toHaveBeenCalledWith("save_config", { config: {
+    ...loadedConfig, chewing_tsf: { ...loadedConfig.chewing_tsf, d512_mode: 0,
+      [mode === 1 ? "d512_personal_bonus" : "d512_suggest_personal_bonus"]: Number("1.66530964545728732") },
+  } });
+});
+
+test("import loads personal preference and both bonuses and export preserves edits across tabs", async () => {
+  const user = await openD512();
+  importedConfig.chewing_tsf.use_personal_candidate_preference = false;
+  importedConfig.chewing_tsf.d512_personal_bonus = 0.625;
+  importedConfig.chewing_tsf.d512_suggest_personal_bonus = 1.875;
+  await act(async () => { await listeners.get("import")!(); });
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "個人學習加分 b" }).value).toBe("0.625");
+  await user.selectOptions(screen.getByRole("combobox", { name: "D512 模式" }), "2");
+  const bonus = screen.getByRole<HTMLInputElement>("textbox", { name: "個人學習加分 b" });
+  expect(bonus.value).toBe("1.875");
+  await user.clear(bonus);
+  await user.type(bonus, "0");
+  await user.click(screen.getByRole("tab", { name: "打字行為" }));
+  const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "使用個人選字偏好" });
+  expect(checkbox.checked).toBe(false);
+  await user.click(checkbox);
+  await act(async () => { await listeners.get("export")!(); });
+  expect(invoke).toHaveBeenCalledWith("export_config", { path: "/synthetic/export.toml", config: {
+    ...importedConfig, chewing_tsf: { ...importedConfig.chewing_tsf, d512_mode: 2,
+      use_personal_candidate_preference: true, d512_suggest_personal_bonus: 0 },
+  } });
+});
 
 test.each([
   [true, false], [false, true], [true, true], [false, false],
@@ -147,6 +262,7 @@ test("shows shared defaults and calibrated presets", async () => {
   expect((screen.getByRole("combobox", { name: "D512 檔位" }) as HTMLSelectElement).value).toBe("balanced");
   expect((screen.getByRole("textbox", { name: "重排權重 w" }) as HTMLInputElement).value).toBe("0.25");
   expect((screen.getByRole("textbox", { name: "替換門檻 τ" }) as HTMLInputElement).value).toBe("0.5");
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "個人學習加分 b" }).value).toBe("2");
   expect((screen.getByRole("option", { name: "保守" }) as HTMLOptionElement).disabled).toBe(false);
   expect((screen.getByRole("option", { name: "積極" }) as HTMLOptionElement).disabled).toBe(false);
   const accept = screen.getByRole("combobox", { name: "接受建議的按鍵" }) as HTMLSelectElement;

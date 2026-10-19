@@ -10,6 +10,7 @@ export type ChewingTsfConfig = {
   lock_chinese_on_caps_lock: boolean;
   show_notification: boolean;
   enable_auto_learn: boolean;
+  use_personal_candidate_preference: boolean;
   esc_clean_all_buf: boolean;
   ctrl_symbol_new_phonetic: boolean;
   cursor_wrap: boolean;
@@ -35,6 +36,8 @@ export type ChewingTsfConfig = {
   d512_margin: number;
   d512_suggest_weight: number;
   d512_suggest_margin: number;
+  d512_personal_bonus: number;
+  d512_suggest_personal_bonus: number;
   cand_per_row: number;
   cand_per_page: number;
   font_size: number;

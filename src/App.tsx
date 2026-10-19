@@ -346,6 +346,8 @@ function App() {
         d512_margin: saved.d512_margin,
         d512_suggest_weight: saved.d512_suggest_weight,
         d512_suggest_margin: saved.d512_suggest_margin,
+        d512_personal_bonus: saved.d512_personal_bonus,
+        d512_suggest_personal_bonus: saved.d512_suggest_personal_bonus,
       }));
     });
   };
@@ -540,6 +542,14 @@ const InputBehaviors = ({
         checked={config?.enable_auto_learn}
         onChange={setBooleanConfig}
       />
+      <Field hint="記住有效送出的手動選字，依近期偏好直接組字並調整多字詞的候選順序。關閉會保留記錄。">
+        <Checkbox
+          label="使用個人選字偏好"
+          name="use_personal_candidate_preference"
+          checked={config?.use_personal_candidate_preference}
+          onChange={setBooleanConfig}
+        />
+      </Field>
       <Checkbox
         label="依照常用程度排序手動選字選單"
         name="sort_candidates_by_frequency"

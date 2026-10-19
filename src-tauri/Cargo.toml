@@ -42,7 +42,7 @@ windows = {
 tauri-build = { version = "2", features = [] }
 
 [patch."https://codeberg.org/chewing/windows-chewing-tsf"]
-chewing_tip_core = { git = "https://github.com/ValorVie/windows-chewing-tsf.git", branch = "valor-feature" }
+chewing_tip_core = { git = "https://github.com/ValorVie/windows-chewing-tsf.git", rev = "5a2446db1f69202780994a43fb9884de4d9836ec" }
 
 [patch.crates-io]
 chewing = { git = "https://github.com/ValorVie/libchewing.git", branch = "valor-feature" }

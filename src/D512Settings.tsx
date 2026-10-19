@@ -23,6 +23,7 @@ export default function D512Settings({ draft, onChange }: Props) {
   const presets = D512_PRESETS[suggestion ? "suggestion" : "automatic"];
   const weightKey = suggestion ? "D512SuggestWeight" : "D512Weight";
   const marginKey = suggestion ? "D512SuggestMargin" : "D512Margin";
+  const bonusKey = suggestion ? "D512SuggestPersonalBonus" : "D512PersonalBonus";
   return (
     <section aria-labelledby="d512-heading">
       <h2 id="d512-heading">D512 句級重排</h2>
@@ -76,6 +77,7 @@ export default function D512Settings({ draft, onChange }: Props) {
       {([
         [weightKey, "重排權重 w"],
         [marginKey, "替換門檻 τ"],
+        [bonusKey, "個人學習加分 b"],
       ] as const).map(([key, label]) => {
         const error = d512ValueError(draft[key]);
         return (

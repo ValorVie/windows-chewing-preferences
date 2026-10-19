@@ -14,6 +14,8 @@ export type D512Draft = {
   D512Margin: string;
   D512SuggestWeight: string;
   D512SuggestMargin: string;
+  D512PersonalBonus: string;
+  D512SuggestPersonalBonus: string;
 };
 
 export const D512_DEFAULTS: Readonly<D512Draft> = {
@@ -24,6 +26,8 @@ export const D512_DEFAULTS: Readonly<D512Draft> = {
   D512Margin: "0.5",
   D512SuggestWeight: "0.25",
   D512SuggestMargin: "2",
+  D512PersonalBonus: "2",
+  D512SuggestPersonalBonus: "2",
 };
 
 export const D512_PRESETS = {
@@ -48,11 +52,13 @@ export function d512DraftFromConfig(config: ChewingTsfConfig): D512Draft {
     D512Margin: String(config.d512_margin),
     D512SuggestWeight: String(config.d512_suggest_weight),
     D512SuggestMargin: String(config.d512_suggest_margin),
+    D512PersonalBonus: String(config.d512_personal_bonus),
+    D512SuggestPersonalBonus: String(config.d512_suggest_personal_bonus),
   };
 }
 
 export function d512DraftHasErrors(draft: D512Draft): boolean {
-  return (["D512Weight", "D512Margin", "D512SuggestWeight", "D512SuggestMargin"] as const)
+  return (["D512Weight", "D512Margin", "D512SuggestWeight", "D512SuggestMargin", "D512PersonalBonus", "D512SuggestPersonalBonus"] as const)
     .some((key) => Boolean(d512ValueError(draft[key])));
 }
 
@@ -72,6 +78,8 @@ export function withD512Draft(config: ChewingTsfConfig, draft: D512Draft): Chewi
     d512_margin: value(draft.D512Margin, config.d512_margin),
     d512_suggest_weight: value(draft.D512SuggestWeight, config.d512_suggest_weight),
     d512_suggest_margin: value(draft.D512SuggestMargin, config.d512_suggest_margin),
+    d512_personal_bonus: value(draft.D512PersonalBonus, config.d512_personal_bonus),
+    d512_suggest_personal_bonus: value(draft.D512SuggestPersonalBonus, config.d512_suggest_personal_bonus),
   };
 }
 

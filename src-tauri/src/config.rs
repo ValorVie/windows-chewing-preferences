@@ -22,11 +22,13 @@ fn validate_d512(config: &Config) -> Result<(), String> {
         settings.d512_margin,
         settings.d512_suggest_weight,
         settings.d512_suggest_margin,
+        settings.d512_personal_bonus,
+        settings.d512_suggest_personal_bonus,
     ]
     .into_iter()
     .any(|value| !value.is_finite() || value < 0.0)
     {
-        return Err("D512 權重與門檻必須是大於或等於 0 的有限數值。".into());
+        return Err("D512 權重、門檻與個人學習加分必須是大於或等於 0 的有限數值。".into());
     }
     Ok(())
 }

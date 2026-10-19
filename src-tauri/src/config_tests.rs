@@ -75,6 +75,148 @@ impl Drop for IsolatedRegistry {
 }
 
 #[test]
+fn personal_pref_defaults_and_legacy_import_use_shared_core() {
+    let defaults = serde_json::to_value(Config::default()).unwrap();
+    let assert_defaults = |config: &serde_json::Value| {
+        assert_eq!(
+            config["chewing_tsf"]["use_personal_candidate_preference"],
+            true
+        );
+        assert_eq!(config["chewing_tsf"]["d512_personal_bonus"], 2.0);
+        assert_eq!(config["chewing_tsf"]["d512_suggest_personal_bonus"], 2.0);
+    };
+    assert_defaults(&defaults);
+    let mut legacy = toml::Value::try_from(Config::default()).unwrap();
+    for field in [
+        "use_personal_candidate_preference",
+        "d512_personal_bonus",
+        "d512_suggest_personal_bonus",
+    ] {
+        legacy["chewing_tsf"].as_table_mut().unwrap().remove(field);
+    }
+    legacy["chewing_tsf"]["d512_weight"] = toml::Value::Float(0.625);
+    let file = TempFile::new();
+    fs::write(&file.0, toml::to_string(&legacy).unwrap()).unwrap();
+    let imported = serde_json::to_value(import_config(file.name()).unwrap()).unwrap();
+    assert_defaults(&imported);
+    assert_eq!(imported["chewing_tsf"]["d512_weight"], 0.625);
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let _registry = IsolatedRegistry::new();
+    assert_defaults(&serde_json::to_value(Config::from_reg().unwrap()).unwrap());
+}
+
+#[test]
+fn personal_pref_round_trip_and_other_setting_edits_preserve_all_three_fields() {
+    let mut wire = serde_json::to_value(Config::default()).unwrap();
+    wire["chewing_tsf"]["use_personal_candidate_preference"] = false.into();
+    wire["chewing_tsf"]["d512_personal_bonus"] = 0.625.into();
+    wire["chewing_tsf"]["d512_suggest_personal_bonus"] = 1.875.into();
+    let cfg: Config = serde_json::from_value(wire).unwrap();
+    // Expected RED on the old core must fail before acquiring the mutex.
+    assert_eq!(
+        serde_json::to_value(cfg).unwrap()["chewing_tsf"]["d512_suggest_personal_bonus"],
+        1.875
+    );
+    let _lock = REGISTRY_LOCK.lock().unwrap();
+    let registry = IsolatedRegistry::new();
+    let key = registry.root.open("Software\\ChewingTextService").unwrap();
+    for enabled in [true, false] {
+        for mode in [0, 1, 2] {
+            for (automatic, suggestion) in [
+                (0.0_f64, 1.875_f64),
+                (1.66530964545728732, 0.0),
+                (1e308, f64::MIN_POSITIVE),
+            ] {
+                let mut wire = serde_json::to_value(Config::default()).unwrap();
+                wire["chewing_tsf"]["use_personal_candidate_preference"] = enabled.into();
+                wire["chewing_tsf"]["d512_mode"] = mode.into();
+                wire["chewing_tsf"]["d512_personal_bonus"] = automatic.into();
+                wire["chewing_tsf"]["d512_suggest_personal_bonus"] = suggestion.into();
+                let cfg: Config = serde_json::from_value(wire).unwrap();
+                let cfg: Config =
+                    serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+                cfg.save_reg();
+                assert_eq!(
+                    key.get_u32("UsePersonalCandidatePreference").unwrap(),
+                    u32::from(enabled)
+                );
+                for (name, expected) in [
+                    ("D512PersonalBonus", automatic),
+                    ("D512SuggestPersonalBonus", suggestion),
+                ] {
+                    assert_eq!(
+                        key.get_string(name)
+                            .unwrap()
+                            .parse::<f64>()
+                            .unwrap()
+                            .to_bits(),
+                        expected.to_bits()
+                    );
+                }
+                let file = TempFile::new();
+                export_config(file.name(), Config::from_reg().unwrap()).unwrap();
+                let mut imported = import_config(file.name()).unwrap();
+                let actual = serde_json::to_value(&imported).unwrap();
+                assert_eq!(
+                    actual["chewing_tsf"]["use_personal_candidate_preference"],
+                    enabled
+                );
+                for (field, expected) in [
+                    ("d512_personal_bonus", automatic),
+                    ("d512_suggest_personal_bonus", suggestion),
+                ] {
+                    assert_eq!(
+                        actual["chewing_tsf"][field].as_f64().unwrap().to_bits(),
+                        expected.to_bits()
+                    );
+                }
+                imported.chewing_tsf.esc_clean_all_buf = true;
+                imported.save_reg();
+                let reloaded = serde_json::to_value(Config::from_reg().unwrap()).unwrap();
+                for field in [
+                    "use_personal_candidate_preference",
+                    "d512_personal_bonus",
+                    "d512_suggest_personal_bonus",
+                ] {
+                    assert_eq!(reloaded["chewing_tsf"][field], actual["chewing_tsf"][field]);
+                }
+                assert_eq!(reloaded["chewing_tsf"]["esc_clean_all_buf"], true);
+            }
+        }
+    }
+}
+
+#[test]
+fn personal_pref_invalid_bonuses_are_rejected_before_save_export_and_after_import() {
+    for mode in [0, 1, 2] {
+        for field in ["d512_personal_bonus", "d512_suggest_personal_bonus"] {
+            for value in [-0.1, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                let mut input = toml::Value::try_from(Config::default()).unwrap();
+                input["chewing_tsf"]["d512_mode"] = toml::Value::Integer(mode);
+                input["chewing_tsf"]
+                    .as_table_mut()
+                    .unwrap()
+                    .insert(field.into(), toml::Value::Float(value));
+                let content = toml::to_string(&input).unwrap();
+                let cfg: Config = toml::from_str(&content).unwrap();
+                assert!(
+                    validate_d512(&cfg).is_err(),
+                    "{field}={value} must fail before save"
+                );
+                assert!(save_config(cfg).is_err());
+                let cfg: Config = toml::from_str(&content).unwrap();
+                let output = TempFile::new();
+                assert!(export_config(output.name(), cfg).is_err());
+                assert!(!output.0.exists());
+                let file = TempFile::new();
+                fs::write(&file.0, content).unwrap();
+                assert!(import_config(file.name()).is_err());
+            }
+        }
+    }
+}
+
+#[test]
 fn input_habits_defaults_and_legacy_import_use_shared_core() {
     let defaults = serde_json::to_value(Config::default()).unwrap();
     assert_eq!(defaults["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
