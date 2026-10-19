@@ -58,7 +58,7 @@ status: implemented
 
 | 標籤 | 共用欄位／登錄鍵 | 共用 core 預設 |
 | --- | --- | --- |
-| ctrl符號輸出(新注音模式) | `ctrl_symbol_new_phonetic`／DWORD `CtrlSymbolNewPhonetic` | 開啟 |
+| ctrl符號輸出(新注音模式) | `ctrl_symbol_new_phonetic`／DWORD `CtrlSymbolNewPhonetic` | 關閉 |
 | 組字區游標左右循環 | `cursor_wrap`／DWORD `CursorWrap` | 關閉 |
 
 Ctrl 符號開關放在 Esc 與 Shift 標點選項之間，說明為「組字中按 Ctrl+， 。 ； ' [ ] 輸入，。；、【】」。游標循環開關放在方向鍵選字選項之後，說明為「游標在組字區最右邊時按右方向鍵跳到最左邊，反之亦然」。兩個開關各自保存，切換分頁或修改其他設定不會覆蓋原值。

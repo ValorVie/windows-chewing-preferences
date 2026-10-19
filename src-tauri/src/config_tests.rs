@@ -219,7 +219,7 @@ fn personal_pref_invalid_bonuses_are_rejected_before_save_export_and_after_impor
 #[test]
 fn input_habits_defaults_and_legacy_import_use_shared_core() {
     let defaults = serde_json::to_value(Config::default()).unwrap();
-    assert_eq!(defaults["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(defaults["chewing_tsf"]["ctrl_symbol_new_phonetic"], false);
     assert_eq!(defaults["chewing_tsf"]["cursor_wrap"], false);
     let mut legacy = toml::Value::try_from(Config::default()).unwrap();
     let settings = legacy["chewing_tsf"].as_table_mut().unwrap();
@@ -228,13 +228,13 @@ fn input_habits_defaults_and_legacy_import_use_shared_core() {
     let file = TempFile::new();
     fs::write(&file.0, toml::to_string(&legacy).unwrap()).unwrap();
     let imported = serde_json::to_value(import_config(file.name()).unwrap()).unwrap();
-    assert_eq!(imported["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(imported["chewing_tsf"]["ctrl_symbol_new_phonetic"], false);
     assert_eq!(imported["chewing_tsf"]["cursor_wrap"], false);
 
     let _lock = REGISTRY_LOCK.lock().unwrap();
     let _registry = IsolatedRegistry::new();
     let loaded = serde_json::to_value(Config::from_reg().unwrap()).unwrap();
-    assert_eq!(loaded["chewing_tsf"]["ctrl_symbol_new_phonetic"], true);
+    assert_eq!(loaded["chewing_tsf"]["ctrl_symbol_new_phonetic"], false);
     assert_eq!(loaded["chewing_tsf"]["cursor_wrap"], false);
 }
 
